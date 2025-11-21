@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
@@ -10,14 +10,30 @@ import { StorageService } from '../../services/storage';
 import { CRITERIA } from '../../config/constants';
 import ConnectionIndicator from '../../components/ConnectionIndicator';
 import { soundService } from '../../services/soundService';
+import CustomAlert from '../../components/CustomAlert';
 
 type Screen = 'scan' | 'evaluate' | 'history';
+
+interface AlertConfig {
+  visible: boolean;
+  title: string;
+  message: string;
+  icon: string;
+  buttons: Array<{ text: string; onPress?: () => void; style?: 'default' | 'primary' | 'danger' }>;
+}
 
 export default function JudgeScreen() {
   const router = useRouter();
   const [currentScreen, setCurrentScreen] = useState<Screen>('scan');
   const [judgeId, setJudgeId] = useState<string | null>(null);
   const [totemId, setTotemId] = useState<string | null>(null);
+  const [alertConfig, setAlertConfig] = useState<AlertConfig>({
+    visible: false,
+    title: '',
+    message: '',
+    icon: '💬',
+    buttons: [],
+  });
   const [activeTeam, setActiveTeam] = useState<Team | null>(null);
   const [activeCriterion, setActiveCriterion] = useState<Criterion | null>(null);
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
@@ -27,6 +43,28 @@ export default function JudgeScreen() {
   
   // Nuevo estado: scores para todos los criterios del equipo actual
   const [criteriaScores, setCriteriaScores] = useState<Record<string, number>>({});
+
+  // Helper para mostrar alertas personalizadas
+  const showAlert = (
+    title: string,
+    message: string,
+    icon: string = '💬',
+    buttons: Array<{ text: string; onPress?: () => void; style?: 'default' | 'primary' | 'danger' }> = [
+      { text: 'Entendido', style: 'primary' }
+    ]
+  ) => {
+    setAlertConfig({
+      visible: true,
+      title,
+      message,
+      icon,
+      buttons,
+    });
+  };
+
+  const closeAlert = () => {
+    setAlertConfig(prev => ({ ...prev, visible: false }));
+  };
 
   useEffect(() => {
     // Cargar datos guardados (solo para historial)
@@ -62,16 +100,17 @@ export default function JudgeScreen() {
           setCurrentScreen('evaluate');
           
           soundService.playNotificationSound();
-          Alert.alert(
-            '🎯 Nuevo Equipo para Evaluar', 
+          showAlert(
+            'Nuevo Equipo para Evaluar', 
             `Evalúa a "${team.name}" en todos los criterios`,
-            [{ text: 'Iniciar Evaluación', onPress: () => {} }]
+            '🎯',
+            [{ text: 'Iniciar Evaluación', style: 'primary' }]
           );
         });
 
         socketService.on('evaluation:received', () => {
           soundService.playEvaluationSound();
-          Alert.alert('Éxito', 'Evaluación enviada correctamente');
+          showAlert('Éxito', 'Evaluación enviada correctamente', '✅');
           setSelectedScore(null);
         });
 
@@ -81,7 +120,7 @@ export default function JudgeScreen() {
         });
 
         socketService.on('evaluation:error', (data: { error: string }) => {
-          Alert.alert('Error al Enviar Evaluación', data.error);
+          showAlert('Error al Enviar Evaluación', data.error, '❌', [{ text: 'Entendido', style: 'danger' }]);
         });
 
         socketService.on('team:added', (team: Team) => {
@@ -130,17 +169,18 @@ export default function JudgeScreen() {
 
     socketService.on('judge:connection-error', (data: { error: string }) => {
       console.log('❌ Error de conexión:', data.error);
-      Alert.alert(
-        '❌ Error de Conexión',
+      showAlert(
+        'Error de Conexión',
         data.error + '\n\nPor favor:\n1. Asegúrate de que el Modo Totem esté abierto\n2. Verifica que el QR sea válido\n3. Intenta escanear nuevamente',
-        [{ text: 'Entendido', onPress: () => setCurrentScreen('scan') }]
+        '❌',
+        [{ text: 'Entendido', onPress: () => setCurrentScreen('scan'), style: 'danger' }]
       );
     });
   };
 
   const handleQRScan = async (token: QRToken) => {
     if (!token.totemId) {
-      Alert.alert('Error', 'QR inválido');
+      showAlert('Error', 'QR inválido', '⚠️', [{ text: 'Entendido', style: 'danger' }]);
       return;
     }
 
@@ -165,7 +205,7 @@ export default function JudgeScreen() {
 
   const handleSubmitAllEvaluations = async () => {
     if (!activeTeam || !judgeId) {
-      Alert.alert('Error', 'No hay equipo activo');
+      showAlert('Error', 'No hay equipo activo', '⚠️', [{ text: 'Entendido', style: 'danger' }]);
       return;
     }
 
@@ -174,10 +214,11 @@ export default function JudgeScreen() {
     const evaluatedCount = Object.keys(criteriaScores).length;
     
     if (evaluatedCount !== totalCriteria) {
-      Alert.alert(
+      showAlert(
         'Evaluación Incompleta',
         `Has evaluado ${evaluatedCount} de ${totalCriteria} criterios. Por favor completa todos antes de enviar.`,
-        [{ text: 'Entendido' }]
+        '⚠️',
+        [{ text: 'Entendido', style: 'primary' }]
       );
       return;
     }
@@ -220,10 +261,11 @@ export default function JudgeScreen() {
     setCriteriaScores({});
     setActiveTeam(null);
     
-    Alert.alert(
-      '✅ Evaluación Enviada',
+    showAlert(
+      'Evaluación Enviada',
       `Has evaluado exitosamente a "${teamName}" en todos los criterios.\n\nEsperando el siguiente equipo...`,
-      [{ text: 'Entendido' }]
+      '✅',
+      [{ text: 'Entendido', style: 'primary' }]
     );
     
     // Mantener en pantalla de evaluación esperando el siguiente equipo
@@ -232,50 +274,80 @@ export default function JudgeScreen() {
 
   if (currentScreen === 'scan') {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Modo Juez</Text>
-        <Text style={styles.subtitle}>Escanea el QR del totem</Text>
-        <View style={styles.connectionContainer}>
-          <ConnectionIndicator status={connectionStatus} />
+      <>
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Modo Juez</Text>
+          <Text style={styles.subtitle}>Escanea el QR del totem</Text>
+          <View style={styles.connectionContainer}>
+            <ConnectionIndicator status={connectionStatus} />
+          </View>
         </View>
-      </View>
-        <QRScanner onScan={handleQRScan} />
-        {totemId && (
-          <TouchableOpacity
-            style={styles.historyButton}
-            onPress={() => setCurrentScreen('history')}
-          >
-            <Text style={styles.historyButtonText}>Ver Historial</Text>
-          </TouchableOpacity>
-        )}
-        </View>
-      </SafeAreaView>
+          <QRScanner onScan={handleQRScan} />
+          {totemId && (
+            <TouchableOpacity
+              style={styles.historyButton}
+              onPress={() => setCurrentScreen('history')}
+            >
+              <Text style={styles.historyButtonText}>Ver Historial</Text>
+            </TouchableOpacity>
+          )}
+          </View>
+        </SafeAreaView>
+        <CustomAlert
+          visible={alertConfig.visible}
+          title={alertConfig.title}
+          message={alertConfig.message}
+          icon={alertConfig.icon}
+          buttons={alertConfig.buttons}
+          onClose={closeAlert}
+        />
+      </>
     );
   }
 
   if (currentScreen === 'evaluate') {
     return (
-      <EvaluationScreenNew
-        activeTeam={activeTeam}
-        criteriaScores={criteriaScores}
-        onScoreChange={(criterionId, score) => {
-          setCriteriaScores(prev => ({ ...prev, [criterionId]: score }));
-        }}
-        onSubmitAll={handleSubmitAllEvaluations}
-        onViewHistory={() => setCurrentScreen('history')}
-        onBack={() => setCurrentScreen('scan')}
-      />
+      <>
+        <EvaluationScreenNew
+          activeTeam={activeTeam}
+          criteriaScores={criteriaScores}
+          onScoreChange={(criterionId, score) => {
+            setCriteriaScores(prev => ({ ...prev, [criterionId]: score }));
+          }}
+          onSubmitAll={handleSubmitAllEvaluations}
+          onViewHistory={() => setCurrentScreen('history')}
+          onBack={() => setCurrentScreen('scan')}
+        />
+        <CustomAlert
+          visible={alertConfig.visible}
+          title={alertConfig.title}
+          message={alertConfig.message}
+          icon={alertConfig.icon}
+          buttons={alertConfig.buttons}
+          onClose={closeAlert}
+        />
+      </>
     );
   }
 
   if (currentScreen === 'history') {
     return (
-      <HistoryScreen
-        evaluations={evaluations}
-        onBack={() => setCurrentScreen(totemId ? 'evaluate' : 'scan')}
-      />
+      <>
+        <HistoryScreen
+          evaluations={evaluations}
+          onBack={() => setCurrentScreen(totemId ? 'evaluate' : 'scan')}
+        />
+        <CustomAlert
+          visible={alertConfig.visible}
+          title={alertConfig.title}
+          message={alertConfig.message}
+          icon={alertConfig.icon}
+          buttons={alertConfig.buttons}
+          onClose={closeAlert}
+        />
+      </>
     );
   }
 
