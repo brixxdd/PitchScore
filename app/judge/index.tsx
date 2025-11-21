@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, SafeAreaView } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import QRScanner from '../../components/QRScanner';
@@ -231,7 +231,8 @@ export default function JudgeScreen() {
 
   if (currentScreen === 'scan') {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Modo Juez</Text>
         <Text style={styles.subtitle}>Escanea el QR del totem</Text>
@@ -248,7 +249,8 @@ export default function JudgeScreen() {
             <Text style={styles.historyButtonText}>Ver Historial</Text>
           </TouchableOpacity>
         )}
-      </View>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -632,6 +634,10 @@ function HistoryScreen({
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#e8f5f2',
+  },
   container: {
     flex: 1,
     backgroundColor: '#e8f5f2',

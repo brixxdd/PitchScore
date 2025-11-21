@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, SafeAreaView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -9,13 +9,14 @@ export default function HomeScreen() {
   const router = useRouter();
 
   return (
-    <LinearGradient
-      colors={['#0a2f2a', '#1a4d44', '#2a6a5e']}
-      style={styles.container}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-    >
-      <StatusBar style="light" />
+    <SafeAreaView style={styles.safeArea}>
+      <LinearGradient
+        colors={['#0a2f2a', '#1a4d44', '#2a6a5e']}
+        style={styles.container}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <StatusBar style="light" />
       
       <View style={styles.content}>
         <View style={styles.header}>
@@ -68,11 +69,16 @@ export default function HomeScreen() {
           <Text style={styles.footerText}>Selecciona tu modo de operación</Text>
         </View>
       </View>
-    </LinearGradient>
+      </LinearGradient>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#0a2f2a',
+  },
   container: {
     flex: 1,
   },

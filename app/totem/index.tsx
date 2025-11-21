@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Modal, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Modal, Alert, SafeAreaView } from 'react-native';
 import { useEffect, useState, useRef } from 'react';
 import * as SystemUI from 'expo-system-ui';
 import { useRouter } from 'expo-router';
@@ -10,6 +10,7 @@ import { socketService } from '../../services/socket';
 import AnimatedPositionChange from '../../components/AnimatedPositionChange';
 import AnimatedScoreChange from '../../components/AnimatedScoreChange';
 import ConnectionIndicator from '../../components/ConnectionIndicator';
+import ResultsScreen from '../../components/ResultsScreen';
 import { soundService } from '../../services/soundService';
 
 type Screen = 'welcome' | 'admin' | 'results';
@@ -238,13 +239,14 @@ export default function TotemScreen() {
 
   if (currentScreen === 'welcome') {
     return (
-      <View style={styles.welcomeContainer}>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.welcomeContainer}>
         <Text style={styles.welcomeTitle}>PitchScore</Text>
         <Text style={styles.welcomeSubtitle}>Modo Totem - Kiosko</Text>
         
         <View style={styles.qrContainer}>
           <Text style={styles.qrLabel}>QR para Conexión de Jueces</Text>
-          <QRCodeDisplay token={qrToken} size={250} />
+          <QRCodeDisplay token={qrToken} size={180} />
           <View style={styles.connectionContainer}>
             <ConnectionIndicator status={connectionStatus} />
           </View>
@@ -263,7 +265,8 @@ export default function TotemScreen() {
         >
           <Text style={styles.resultsButtonText}>Ver Resultados</Text>
         </TouchableOpacity>
-      </View>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -502,192 +505,11 @@ function AdminPanel({
   );
 }
 
-// Pantalla de Resultados
-function ResultsScreen({
-  teams,
-  activeTeam,
-  activeCriterion,
-  onBack,
-}: {
-  teams: Team[];
-  activeTeam: string | null;
-  activeCriterion: string | null;
-  onBack: () => void;
-}) {
-  const previousPositionsRef = useRef<Map<string, number>>(new Map());
-  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
-  const [dotOpacity, setDotOpacity] = useState<number>(1);
-  const [isUpdating, setIsUpdating] = useState<boolean>(false);
-  
-  // Actualizar timestamp cuando cambian los equipos
-  useEffect(() => {
-    if (teams && teams.length > 0) {
-      setLastUpdate(new Date());
-      setIsUpdating(true);
-      console.log('🔄 ResultsScreen actualizado con', teams.length, 'equipos');
-      
-      // Ocultar badge después de 2 segundos
-      const timeout = setTimeout(() => {
-        setIsUpdating(false);
-      }, 2000);
-      
-      return () => clearTimeout(timeout);
-    }
-  }, [teams]);
-  
-  // Animar el punto "EN VIVO"
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setDotOpacity((prev) => (prev === 1 ? 0.3 : 1));
-    }, 800);
-    return () => clearInterval(interval);
-  }, []);
-  
-  // Polling rápido para actualizaciones (cada 2 segundos)
-  // Asegura que los datos estén siempre actualizados
-  useEffect(() => {
-    // Solicitar datos inmediatamente al abrir la pantalla
-    console.log('📊 Pantalla de resultados abierta - Solicitando datos iniciales...');
-    socketService.emit('team:list', { totemId: 'totem-1' });
-    
-    // Polling cada 2 segundos para actualizaciones en tiempo real
-    const pollingInterval = setInterval(() => {
-      console.log('🔄 Polling: Solicitando actualización de equipos...');
-      socketService.emit('team:list', { totemId: 'totem-1' });
-    }, 2000); // 2 segundos - actualizaciones muy rápidas ⚡
-    
-    return () => {
-      clearInterval(pollingInterval);
-      console.log('📊 Pantalla de resultados cerrada - Polling detenido');
-    };
-  }, []); // Sin dependencias, se ejecuta solo al montar/desmontar
-
-  // Calcular promedio por criterio
-  const getAverageByCriterion = (criterionId: string): number => {
-    if (!teams || teams.length === 0) return 0;
-    
-    const scores = teams
-      .filter((team) => team && team.scores) // Validar que team y scores existen
-      .map((team) => team.scores[criterionId] || 0)
-      .filter((score) => score > 0);
-    
-    if (scores.length === 0) return 0;
-    return scores.reduce((sum, score) => sum + score, 0) / scores.length;
-  };
-
-  // Actualizar posiciones anteriores
-  useEffect(() => {
-    if (!teams || teams.length === 0) return;
-    
-    const newPositions = new Map<string, number>();
-    teams.forEach((team, index) => {
-      if (team && team.id) {
-        newPositions.set(team.id, index + 1);
-      }
-    });
-    previousPositionsRef.current = newPositions;
-  }, [teams]);
-
-  return (
-    <View style={styles.resultsContainer}>
-      <View style={styles.resultsHeader}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>← Volver</Text>
-        </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.resultsTitle}>Resultados en Tiempo Real</Text>
-          <View style={styles.liveIndicator}>
-            <View style={[styles.liveDot, { opacity: dotOpacity }]} />
-            <Text style={styles.liveText}>EN VIVO</Text>
-          </View>
-          <Text style={styles.lastUpdateText}>
-            Actualizado: {lastUpdate.toLocaleTimeString('es-ES')}
-          </Text>
-        </View>
-      </View>
-
-      {/* Badge de actualización */}
-      {isUpdating && (
-        <View style={styles.updatingBadge}>
-          <Text style={styles.updatingText}>🔄 ACTUALIZANDO...</Text>
-        </View>
-      )}
-
-      {/* Promedios por criterio */}
-      {teams.length > 0 && (
-        <View style={styles.averagesSection}>
-          <View style={styles.averagesHeader}>
-            <Text style={styles.averagesTitle}>Promedios por Criterio</Text>
-            <Text style={styles.teamCount}>{teams.length} Equipo{teams.length !== 1 ? 's' : ''}</Text>
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.averagesList}>
-            {CRITERIA.map((criterion) => {
-              const avg = getAverageByCriterion(criterion.id);
-              return (
-                <View key={criterion.id} style={styles.averageItem}>
-                  <Text style={styles.averageLabel} numberOfLines={2}>
-                    {criterion.name}
-                  </Text>
-                  <Text style={styles.averageValue}>{avg.toFixed(2)}</Text>
-                </View>
-              );
-            })}
-          </ScrollView>
-        </View>
-      )}
-
-      <ScrollView style={styles.resultsList}>
-        {teams.length === 0 ? (
-          <Text style={styles.noResults}>No hay equipos registrados</Text>
-        ) : (
-          teams.map((team, index) => {
-            // Validar que el equipo tiene datos válidos
-            if (!team || !team.id) return null;
-            
-            const previousPosition = previousPositionsRef.current.get(team.id) || index + 1;
-            const teamScores = team.scores || {};
-            const finalScore = team.finalScore || 0;
-            
-            return (
-              <AnimatedPositionChange
-                key={team.id}
-                currentPosition={index + 1}
-                previousPosition={previousPosition}
-              >
-                <View
-                  style={[
-                    styles.resultItem,
-                    index === 0 && styles.firstPlace,
-                    activeTeam === team.id && styles.activeTeam,
-                  ]}
-                >
-                  <View style={styles.positionBadge}>
-                    <Text style={styles.positionText}>{index + 1}</Text>
-                  </View>
-                  <View style={styles.teamInfo}>
-                    <Text style={styles.teamNameResult}>{team.name || 'Sin nombre'}</Text>
-                    <AnimatedScoreChange
-                      score={finalScore}
-                      isFirstPlace={index === 0}
-                    />
-                    {activeCriterion && teamScores[activeCriterion] !== undefined && (
-                      <Text style={styles.criterionScore}>
-                        {CRITERIA.find((c) => c.id === activeCriterion)?.name}:{' '}
-                        {teamScores[activeCriterion].toFixed(2)}
-                      </Text>
-                    )}
-                  </View>
-                </View>
-              </AnimatedPositionChange>
-            );
-          })
-        )}
-      </ScrollView>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#0a2f2a',
+  },
   welcomeContainer: {
     flex: 1,
     backgroundColor: '#0a2f2a',
@@ -712,22 +534,22 @@ const styles = StyleSheet.create({
   },
   qrContainer: {
     backgroundColor: '#ffffff',
-    padding: 35,
-    borderRadius: 25,
-    marginBottom: 40,
+    padding: 25,
+    borderRadius: 20,
+    marginBottom: 30,
     alignItems: 'center',
     borderWidth: 3,
     borderColor: '#5dbba7',
     shadowColor: '#5dbba7',
-    shadowOffset: { width: 0, height: 8 },
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
-    shadowRadius: 15,
-    elevation: 10,
+    shadowRadius: 12,
+    elevation: 8,
   },
   qrLabel: {
-    fontSize: 20,
+    fontSize: 18,
     color: '#0a2f2a',
-    marginBottom: 25,
+    marginBottom: 18,
     fontWeight: 'bold',
     textAlign: 'center',
   },
@@ -925,200 +747,9 @@ const styles = StyleSheet.create({
     color: '#333',
     flex: 1,
   },
-  resultsContainer: {
-    flex: 1,
-    backgroundColor: '#e8f5f2',
-  },
-  resultsHeader: {
-    backgroundColor: '#5dbba7',
-    padding: 25,
-    paddingTop: 60,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    shadowColor: '#5dbba7',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  headerTitleContainer: {
-    flex: 1,
-    marginLeft: 10,
-  },
-  resultsTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 8,
-  },
-  liveIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginBottom: 6,
-    alignSelf: 'flex-start',
-  },
-  liveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#4CAF50',
-    marginRight: 6,
-  },
-  liveText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-  },
-  lastUpdateText: {
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontSize: 12,
-    fontStyle: 'italic',
-  },
-  resultsList: {
-    flex: 1,
-    padding: 15,
-  },
-  noResults: {
-    textAlign: 'center',
-    fontSize: 16,
-    color: '#666',
-    marginTop: 50,
-  },
-  resultItem: {
-    backgroundColor: '#fff',
-    padding: 25,
-    borderRadius: 20,
-    marginBottom: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#5dbba7',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    borderLeftWidth: 5,
-    borderLeftColor: '#a0d9cd',
-  },
-  firstPlace: {
-    backgroundColor: '#fffbf0',
-    borderWidth: 4,
-    borderColor: '#FFD700',
-    borderLeftWidth: 8,
-    borderLeftColor: '#FFD700',
-    shadowColor: '#FFD700',
-    shadowOpacity: 0.3,
-    elevation: 8,
-  },
-  activeTeam: {
-    borderWidth: 3,
-    borderColor: '#5dbba7',
-    backgroundColor: '#f0faf8',
-  },
-  positionBadge: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#5dbba7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 20,
-    borderWidth: 3,
-    borderColor: '#fff',
-    shadowColor: '#5dbba7',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 5,
-    elevation: 6,
-  },
-  positionText: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  teamInfo: {
-    flex: 1,
-  },
-  teamNameResult: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 5,
-  },
-  scoreText: {
-    fontSize: 16,
-    color: '#666',
-  },
   connectionContainer: {
     marginTop: 15,
     alignItems: 'center',
-  },
-  updatingBadge: {
-    backgroundColor: '#FF9800',
-    padding: 12,
-    alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: '#F57C00',
-  },
-  updatingText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-  },
-  averagesSection: {
-    backgroundColor: '#fff',
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  averagesHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  averagesTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  teamCount: {
-    fontSize: 14,
-    color: '#666',
-    fontStyle: 'italic',
-  },
-  averagesList: {
-    flexDirection: 'row',
-  },
-  averageItem: {
-    backgroundColor: '#f5f5f5',
-    padding: 10,
-    borderRadius: 8,
-    marginRight: 10,
-    minWidth: 100,
-    alignItems: 'center',
-  },
-  averageLabel: {
-    fontSize: 11,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 5,
-  },
-  averageValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#2196F3',
-  },
-  criterionScore: {
-    fontSize: 14,
-    color: '#4CAF50',
-    marginTop: 5,
-    fontWeight: '600',
   },
   noTeamsText: {
     fontSize: 14,
