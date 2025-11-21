@@ -43,50 +43,100 @@ export default function TotemScreen() {
         await socketService.connect(SERVER_URL);
         setConnectionStatus('connected');
         
-        // Escuchar actualizaciones de equipos
+        // Unirse a la sala del totem para recibir actualizaciones
+        console.log(`📡 Conectando Totem "${totemId}" a su sala...`);
+        socketService.emit('totem:connect', { totemId });
+        
+        socketService.on('totem:connected', (data: { totemId: string }) => {
+          console.log(`✅ Totem "${data.totemId}" conectado exitosamente a la sala`);
+        });
+        
+        // Escuchar actualizaciones de equipos individuales
         socketService.on('team:updated', (team: Team) => {
-          setTeams((prev) => {
-            // Guardar posiciones anteriores
-            const prevPositions = new Map<string, number>();
-            prev.forEach((t, idx) => prevPositions.set(t.id, idx + 1));
-            setPreviousPositions(prevPositions);
-
-            const updated = prev.map((t) => (t.id === team.id ? team : t));
+          console.log('🔄 Equipo actualizado:', team.name, 'Score:', team.finalScore);
+          
+          setTeams((prevTeams) => {
+            // Actualizar equipo específico
+            const updated = prevTeams.map((t) => (t.id === team.id ? team : t));
+            // Ordenar por puntaje
             const sorted = updated.sort((a, b) => b.finalScore - a.finalScore);
             
             // Verificar si hay nuevo primer lugar
-            if (sorted.length > 0 && sorted[0].id !== previousFirstPlace.current) {
-              previousFirstPlace.current = sorted[0].id;
-              soundService.playCelebrationSound();
-            } else {
-              soundService.playNotificationSound();
+            if (sorted.length > 0) {
+              const currentFirstPlace = sorted[0].id;
+              if (currentFirstPlace !== previousFirstPlace.current && previousFirstPlace.current !== null) {
+                previousFirstPlace.current = currentFirstPlace;
+                soundService.playCelebrationSound();
+                console.log('🏆 ¡Nuevo primer lugar!', sorted[0].name);
+              } else if (previousFirstPlace.current === null) {
+                previousFirstPlace.current = currentFirstPlace;
+              } else {
+                soundService.playNotificationSound();
+              }
             }
             
             return sorted;
           });
         });
 
+        // Escuchar actualizaciones del ranking completo (MÁS IMPORTANTE)
         socketService.on('results:updated', (data: { teams: Team[] }) => {
-          const sorted = data.teams.sort((a, b) => b.finalScore - a.finalScore);
-          setTeams(sorted);
+          console.log('📊 Resultados completos actualizados:', data.teams.length, 'equipos');
+          
+          setTeams((prevTeams) => {
+            // Ordenar por puntaje
+            const sorted = [...data.teams].sort((a, b) => b.finalScore - a.finalScore);
+            
+            // Verificar si hay nuevo primer lugar
+            if (sorted.length > 0) {
+              const currentFirstPlace = sorted[0].id;
+              const previousFirst = prevTeams.length > 0 ? prevTeams[0].id : null;
+              
+              if (currentFirstPlace !== previousFirst && previousFirst !== null) {
+                soundService.playCelebrationSound();
+                console.log('🏆 ¡Nuevo primer lugar!', sorted[0].name, 'con', sorted[0].finalScore.toFixed(2), 'puntos');
+              } else if (previousFirst !== null) {
+                soundService.playNotificationSound();
+              }
+              
+              previousFirstPlace.current = currentFirstPlace;
+            }
+            
+            return sorted;
+          });
         });
 
+        // Escuchar equipos nuevos agregados
         socketService.on('team:added', (team: Team) => {
-          setTeams((prev) => {
-            const exists = prev.some((t) => t.id === team.id);
-            if (exists) return prev;
-            return [...prev, team];
+          console.log('➕ Nuevo equipo agregado:', team.name);
+          
+          setTeams((prevTeams) => {
+            const exists = prevTeams.some((t) => t.id === team.id);
+            if (exists) {
+              console.log('⚠️ Equipo ya existe, ignorando duplicado');
+              return prevTeams;
+            }
+            return [...prevTeams, team].sort((a, b) => b.finalScore - a.finalScore);
           });
         });
 
         // Solicitar equipos existentes al conectar
+        console.log('📡 Solicitando lista de equipos...');
         socketService.emit('team:list', { totemId });
+        
         socketService.on('team:list:response', (data: { teams: Team[] }) => {
-          setTeams(data.teams);
+          console.log('📋 Lista de equipos recibida:', data.teams.length, 'equipos');
+          const sorted = [...data.teams].sort((a, b) => b.finalScore - a.finalScore);
+          setTeams(sorted);
+          
+          // Establecer primer lugar inicial
+          if (sorted.length > 0) {
+            previousFirstPlace.current = sorted[0].id;
+          }
         });
       } catch (error) {
         setConnectionStatus('disconnected');
-        console.error('Error conectando socket:', error);
+        console.error('❌ Error conectando socket:', error);
       }
     };
 
@@ -99,9 +149,10 @@ export default function TotemScreen() {
 
     return () => {
       clearInterval(qrInterval);
+      console.log('🔌 Desconectando socket...');
       socketService.disconnect();
     };
-  }, [totemId, activeTeam, activeCriterion]);
+  }, [totemId]);
 
   // Actualizar QR cuando cambia equipo o criterio
   useEffect(() => {
@@ -123,6 +174,23 @@ export default function TotemScreen() {
     
     // Agregar localmente (se actualizará cuando el backend confirme)
     setTeams([...teams, newTeam]);
+  };
+
+  const handleSendTeamToJudges = (teamId: string) => {
+    const team = teams.find(t => t.id === teamId);
+    if (!team) return;
+    
+    // Enviar equipo a jueces para evaluación completa
+    socketService.emit('team:send-to-judges', { totemId, teamId });
+    
+    // Marcar localmente como enviado
+    setTeams(prevTeams => 
+      prevTeams.map(t => 
+        t.id === teamId ? { ...t, sentToJudges: true } : t
+      )
+    );
+    
+    soundService.playNotificationSound();
   };
 
   const handleChangeTeam = (teamId: string) => {
@@ -173,6 +241,7 @@ export default function TotemScreen() {
         activeTeam={activeTeam}
         activeCriterion={activeCriterion}
         onAddTeam={handleAddTeam}
+        onSendTeamToJudges={handleSendTeamToJudges}
         onChangeTeam={handleChangeTeam}
         onChangeCriterion={handleChangeCriterion}
         onBack={() => setCurrentScreen('welcome')}
@@ -201,6 +270,7 @@ function AdminPanel({
   activeTeam,
   activeCriterion,
   onAddTeam,
+  onSendTeamToJudges,
   onChangeTeam,
   onChangeCriterion,
   onBack,
@@ -210,6 +280,7 @@ function AdminPanel({
   activeTeam: string | null;
   activeCriterion: string | null;
   onAddTeam: (name: string) => void;
+  onSendTeamToJudges: (teamId: string) => void;
   onChangeTeam: (teamId: string) => void;
   onChangeCriterion: (criterionId: string) => void;
   onBack: () => void;
@@ -228,7 +299,7 @@ function AdminPanel({
 
       {/* Registrar Equipos */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Registrar Equipos</Text>
+        <Text style={styles.sectionTitle}>📋 Equipos Registrados</Text>
         <View style={styles.inputContainer}>
           <Text style={styles.inputLabel}>Nombre del Equipo:</Text>
           <TextInput
@@ -248,27 +319,58 @@ function AdminPanel({
             }}
             disabled={!newTeamName.trim()}
           >
-            <Text style={styles.addButtonText}>Agregar Equipo</Text>
+            <Text style={styles.addButtonText}>➕ Agregar Equipo</Text>
           </TouchableOpacity>
         </View>
+        
+        <View style={styles.teamsListHeader}>
+          <Text style={styles.teamsListTitle}>Lista de Equipos</Text>
+          <Text style={styles.teamsListSubtitle}>
+            Envía equipos a jueces para evaluación completa
+          </Text>
+        </View>
+        
         <View style={styles.teamsList}>
           {teams && teams.length > 0 ? (
             teams.map((team) => {
               if (!team || !team.id) return null;
+              const isSent = team.sentToJudges === true;
               return (
-                <TouchableOpacity
-                  key={team.id}
-                  style={[
-                    styles.teamItem,
-                    activeTeam === team.id && styles.teamItemActive,
-                  ]}
-                  onPress={() => onChangeTeam(team.id)}
-                >
-                  <Text style={styles.teamName}>{team.name}</Text>
-                  {activeTeam === team.id && (
-                    <Text style={styles.activeLabel}>ACTIVO</Text>
-                  )}
-                </TouchableOpacity>
+                <View key={team.id} style={styles.teamItemContainer}>
+                  <View
+                    style={[
+                      styles.teamItem,
+                      isSent && styles.teamItemSent,
+                    ]}
+                  >
+                    <View style={styles.teamItemContent}>
+                      <Text style={[
+                        styles.teamName,
+                        isSent && styles.teamNameSent
+                      ]}>
+                        {team.name}
+                      </Text>
+                      {isSent && (
+                        <Text style={styles.sentLabel}>✅ ENVIADO A JUECES</Text>
+                      )}
+                    </View>
+                    <TouchableOpacity
+                      style={[
+                        styles.sendButton,
+                        isSent && styles.sendButtonDisabled,
+                      ]}
+                      onPress={() => onSendTeamToJudges(team.id)}
+                      disabled={isSent}
+                    >
+                      <Text style={[
+                        styles.sendButtonText,
+                        isSent && styles.sendButtonTextDisabled
+                      ]}>
+                        {isSent ? '🔒 Enviado' : '📤 Enviar'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
               );
             })
           ) : (
@@ -277,30 +379,8 @@ function AdminPanel({
         </View>
       </View>
 
-      {/* Seleccionar Criterio */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Criterio de Evaluación</Text>
-        <View style={styles.criteriaList}>
-          {CRITERIA.map((criterion) => (
-            <TouchableOpacity
-              key={criterion.id}
-              style={[
-                styles.criterionItem,
-                activeCriterion === criterion.id && styles.criterionItemActive,
-              ]}
-              onPress={() => onChangeCriterion(criterion.id)}
-            >
-              <Text style={styles.criterionName}>{criterion.name}</Text>
-              {activeCriterion === criterion.id && (
-                <Text style={styles.activeLabel}>ACTIVO</Text>
-              )}
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
       <TouchableOpacity style={styles.resultsButton} onPress={onViewResults}>
-        <Text style={styles.resultsButtonText}>Ver Resultados en Tiempo Real</Text>
+        <Text style={styles.resultsButtonText}>📊 Ver Resultados en Tiempo Real</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -319,6 +399,52 @@ function ResultsScreen({
   onBack: () => void;
 }) {
   const previousPositionsRef = useRef<Map<string, number>>(new Map());
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [dotOpacity, setDotOpacity] = useState<number>(1);
+  const [isUpdating, setIsUpdating] = useState<boolean>(false);
+  
+  // Actualizar timestamp cuando cambian los equipos
+  useEffect(() => {
+    if (teams && teams.length > 0) {
+      setLastUpdate(new Date());
+      setIsUpdating(true);
+      console.log('🔄 ResultsScreen actualizado con', teams.length, 'equipos');
+      
+      // Ocultar badge después de 2 segundos
+      const timeout = setTimeout(() => {
+        setIsUpdating(false);
+      }, 2000);
+      
+      return () => clearTimeout(timeout);
+    }
+  }, [teams]);
+  
+  // Animar el punto "EN VIVO"
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDotOpacity((prev) => (prev === 1 ? 0.3 : 1));
+    }, 800);
+    return () => clearInterval(interval);
+  }, []);
+  
+  // Polling rápido para actualizaciones (cada 2 segundos)
+  // Asegura que los datos estén siempre actualizados
+  useEffect(() => {
+    // Solicitar datos inmediatamente al abrir la pantalla
+    console.log('📊 Pantalla de resultados abierta - Solicitando datos iniciales...');
+    socketService.emit('team:list', { totemId: 'totem-1' });
+    
+    // Polling cada 2 segundos para actualizaciones en tiempo real
+    const pollingInterval = setInterval(() => {
+      console.log('🔄 Polling: Solicitando actualización de equipos...');
+      socketService.emit('team:list', { totemId: 'totem-1' });
+    }, 2000); // 2 segundos - actualizaciones muy rápidas ⚡
+    
+    return () => {
+      clearInterval(pollingInterval);
+      console.log('📊 Pantalla de resultados cerrada - Polling detenido');
+    };
+  }, []); // Sin dependencias, se ejecuta solo al montar/desmontar
 
   // Calcular promedio por criterio
   const getAverageByCriterion = (criterionId: string): number => {
@@ -352,13 +478,32 @@ function ResultsScreen({
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Text style={styles.backButtonText}>← Volver</Text>
         </TouchableOpacity>
-        <Text style={styles.resultsTitle}>Resultados en Tiempo Real</Text>
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.resultsTitle}>Resultados en Tiempo Real</Text>
+          <View style={styles.liveIndicator}>
+            <View style={[styles.liveDot, { opacity: dotOpacity }]} />
+            <Text style={styles.liveText}>EN VIVO</Text>
+          </View>
+          <Text style={styles.lastUpdateText}>
+            Actualizado: {lastUpdate.toLocaleTimeString('es-ES')}
+          </Text>
+        </View>
       </View>
+
+      {/* Badge de actualización */}
+      {isUpdating && (
+        <View style={styles.updatingBadge}>
+          <Text style={styles.updatingText}>🔄 ACTUALIZANDO...</Text>
+        </View>
+      )}
 
       {/* Promedios por criterio */}
       {teams.length > 0 && (
         <View style={styles.averagesSection}>
-          <Text style={styles.averagesTitle}>Promedios por Criterio</Text>
+          <View style={styles.averagesHeader}>
+            <Text style={styles.averagesTitle}>Promedios por Criterio</Text>
+            <Text style={styles.teamCount}>{teams.length} Equipo{teams.length !== 1 ? 's' : ''}</Text>
+          </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.averagesList}>
             {CRITERIA.map((criterion) => {
               const avg = getAverageByCriterion(criterion.id);
@@ -618,13 +763,45 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingTop: 60,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+  },
+  headerTitleContainer: {
+    flex: 1,
+    marginLeft: 10,
   },
   resultsTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
-    marginLeft: 10,
+    marginBottom: 8,
+  },
+  liveIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 6,
+    alignSelf: 'flex-start',
+  },
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#4CAF50',
+    marginRight: 6,
+  },
+  liveText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+  lastUpdateText: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 12,
+    fontStyle: 'italic',
   },
   resultsList: {
     flex: 1,
@@ -689,17 +866,40 @@ const styles = StyleSheet.create({
     marginTop: 15,
     alignItems: 'center',
   },
+  updatingBadge: {
+    backgroundColor: '#FF9800',
+    padding: 12,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: '#F57C00',
+  },
+  updatingText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
   averagesSection: {
     backgroundColor: '#fff',
     padding: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
+  averagesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
   averagesTitle: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 10,
+  },
+  teamCount: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
   },
   averagesList: {
     flexDirection: 'row',
@@ -735,5 +935,66 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
     padding: 20,
+  },
+  teamsListHeader: {
+    marginVertical: 15,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  teamsListTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 5,
+  },
+  teamsListSubtitle: {
+    fontSize: 13,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  teamItemContainer: {
+    marginBottom: 12,
+  },
+  teamItemContent: {
+    flex: 1,
+    marginRight: 10,
+  },
+  teamItemSent: {
+    backgroundColor: '#E8F5E9',
+    borderColor: '#A5D6A7',
+    opacity: 0.7,
+  },
+  teamNameSent: {
+    color: '#2E7D32',
+  },
+  sentLabel: {
+    fontSize: 11,
+    color: '#4CAF50',
+    fontWeight: 'bold',
+    marginTop: 5,
+  },
+  sendButton: {
+    backgroundColor: '#FF9800',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  sendButtonDisabled: {
+    backgroundColor: '#E0E0E0',
+    elevation: 0,
+  },
+  sendButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  sendButtonTextDisabled: {
+    color: '#999',
   },
 });

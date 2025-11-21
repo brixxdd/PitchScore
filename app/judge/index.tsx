@@ -23,6 +23,9 @@ export default function JudgeScreen() {
   const [selectedScore, setSelectedScore] = useState<number | null>(null);
   const [pendingEvaluations, setPendingEvaluations] = useState<number>(0);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
+  
+  // Nuevo estado: scores para todos los criterios del equipo actual
+  const [criteriaScores, setCriteriaScores] = useState<Record<string, number>>({});
 
   useEffect(() => {
     // Cargar datos guardados
@@ -54,47 +57,36 @@ export default function JudgeScreen() {
         await socketService.connect(SERVER_URL);
         setConnectionStatus('connected');
 
-        // Escuchar cambios del totem
-        socketService.on('totem:team-changed', (data) => {
-          // Actualizar equipo activo
-          const team: Team = {
-            id: data.teamId,
-            name: data.teamName,
-            totemId: totemId || '',
-            scores: {},
-            finalScore: 0,
-            positionHistory: [],
-          };
+        // Escuchar cuando un equipo es enviado para evaluación completa
+        socketService.on('team:received', (data: { team: Team }) => {
+          const team = data.team;
           setActiveTeam(team);
-          setSelectedScore(null);
+          setCriteriaScores({}); // Resetear scores al recibir nuevo equipo
           
           // Cambiar a pantalla de evaluación automáticamente
           setCurrentScreen('evaluate');
           
           soundService.playNotificationSound();
-          Alert.alert('Equipo Asignado', `Evalúa a: ${data.teamName}`);
-        });
-
-        socketService.on('totem:criterion-changed', (data) => {
-          const criterion = CRITERIA.find((c) => c.id === data.criterionId);
-          if (criterion) {
-            setActiveCriterion(criterion);
-            setSelectedScore(null);
-            
-            // Si ya hay equipo activo, cambiar a evaluación
-            if (activeTeam) {
-              setCurrentScreen('evaluate');
-            }
-            
-            soundService.playNotificationSound();
-            Alert.alert('Criterio Asignado', `Evalúa: ${criterion.name}`);
-          }
+          Alert.alert(
+            '🎯 Nuevo Equipo para Evaluar', 
+            `Evalúa a "${team.name}" en todos los criterios`,
+            [{ text: 'Iniciar Evaluación', onPress: () => {} }]
+          );
         });
 
         socketService.on('evaluation:received', () => {
           soundService.playEvaluationSound();
           Alert.alert('Éxito', 'Evaluación enviada correctamente');
           setSelectedScore(null);
+        });
+
+        socketService.on('evaluation:complete', (data: { teamId: string; judgeId: string; finalScore: number; teamName: string }) => {
+          soundService.playEvaluationSound();
+          console.log(`✅ Evaluación completa confirmada para ${data.teamName}: ${data.finalScore.toFixed(2)} puntos`);
+        });
+
+        socketService.on('evaluation:error', (data: { error: string }) => {
+          Alert.alert('Error al Enviar Evaluación', data.error);
         });
 
         socketService.on('team:added', (team: Team) => {
@@ -158,35 +150,71 @@ export default function JudgeScreen() {
     await connectToTotem(token.totemId, newJudgeId);
   };
 
-  const handleSubmitEvaluation = async () => {
-    if (!selectedScore || !activeTeam || !activeCriterion || !judgeId) {
-      Alert.alert('Error', 'Por favor selecciona una puntuación');
+  const handleSubmitAllEvaluations = async () => {
+    if (!activeTeam || !judgeId) {
+      Alert.alert('Error', 'No hay equipo activo');
       return;
     }
 
-    const evaluation: Evaluation = {
-      teamId: activeTeam.id,
-      judgeId,
-      criterionId: activeCriterion.id,
-      score: selectedScore,
-      timestamp: new Date(),
-    };
+    // Verificar que se hayan evaluado todos los criterios
+    const totalCriteria = CRITERIA.length;
+    const evaluatedCount = Object.keys(criteriaScores).length;
+    
+    if (evaluatedCount !== totalCriteria) {
+      Alert.alert(
+        'Evaluación Incompleta',
+        `Has evaluado ${evaluatedCount} de ${totalCriteria} criterios. Por favor completa todos antes de enviar.`,
+        [{ text: 'Entendido' }]
+      );
+      return;
+    }
 
-    // Enviar al servidor
-    socketService.emit('evaluation:submit', {
+    // Preparar evaluaciones para envío en batch
+    const evaluationsToSend = Object.entries(criteriaScores).map(([criterionId, score]) => ({
+      criterionId,
+      score,
+    }));
+
+    // Enviar TODAS las evaluaciones en un solo evento (BATCH)
+    socketService.emit('evaluation:submit-batch', {
       teamId: activeTeam.id,
       judgeId,
-      criterionId: activeCriterion.id,
-      score: selectedScore,
+      evaluations: evaluationsToSend,
     });
 
     // Guardar localmente
-    await StorageService.addEvaluation(evaluation);
-    setEvaluations([...evaluations, evaluation]);
-    setSelectedScore(null);
+    const newEvaluations: Evaluation[] = [];
+    for (const [criterionId, score] of Object.entries(criteriaScores)) {
+      const evaluation: Evaluation = {
+        teamId: activeTeam.id,
+        judgeId,
+        criterionId,
+        score,
+        timestamp: new Date(),
+      };
+      await StorageService.addEvaluation(evaluation);
+      newEvaluations.push(evaluation);
+    }
+    
+    setEvaluations([...evaluations, ...newEvaluations]);
     
     // Reproducir sonido de confirmación
     soundService.playEvaluationSound();
+    
+    const teamName = activeTeam.name;
+    
+    // Limpiar estado para el siguiente equipo
+    setCriteriaScores({});
+    setActiveTeam(null);
+    
+    Alert.alert(
+      '✅ Evaluación Enviada',
+      `Has evaluado exitosamente a "${teamName}" en todos los criterios.\n\nEsperando el siguiente equipo...`,
+      [{ text: 'Entendido' }]
+    );
+    
+    // Mantener en pantalla de evaluación esperando el siguiente equipo
+    // NO cambiar a setCurrentScreen('scan') porque ya está conectado
   };
 
   if (currentScreen === 'scan') {
@@ -214,14 +242,15 @@ export default function JudgeScreen() {
 
   if (currentScreen === 'evaluate') {
     return (
-      <EvaluationScreen
+      <EvaluationScreenNew
         activeTeam={activeTeam}
-        activeCriterion={activeCriterion}
-        selectedScore={selectedScore}
-        onScoreSelect={setSelectedScore}
-        onSubmit={handleSubmitEvaluation}
+        criteriaScores={criteriaScores}
+        onScoreChange={(criterionId, score) => {
+          setCriteriaScores(prev => ({ ...prev, [criterionId]: score }));
+        }}
+        onSubmitAll={handleSubmitAllEvaluations}
         onViewHistory={() => setCurrentScreen('history')}
-        pendingEvaluations={pendingEvaluations}
+        onBack={() => setCurrentScreen('scan')}
       />
     );
   }
@@ -238,7 +267,179 @@ export default function JudgeScreen() {
   return null;
 }
 
-// Pantalla de Evaluación
+// Nueva Pantalla de Evaluación - Todos los criterios a la vez
+function EvaluationScreenNew({
+  activeTeam,
+  criteriaScores,
+  onScoreChange,
+  onSubmitAll,
+  onViewHistory,
+  onBack,
+}: {
+  activeTeam: Team | null;
+  criteriaScores: Record<string, number>;
+  onScoreChange: (criterionId: string, score: number) => void;
+  onSubmitAll: () => void;
+  onViewHistory: () => void;
+  onBack: () => void;
+}) {
+  const totalCriteria = CRITERIA.length;
+  const evaluatedCount = Object.keys(criteriaScores).length;
+  const allEvaluated = evaluatedCount === totalCriteria;
+
+  return (
+    <ScrollView style={styles.evaluateContainer}>
+      <View style={styles.evaluateHeader}>
+        <View style={styles.headerContent}>
+          <TouchableOpacity onPress={onBack} style={styles.backButtonSmall}>
+            <Text style={styles.backButtonText}>← Volver</Text>
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.evaluateTitle}>Evaluación Completa</Text>
+            <ConnectionIndicator status={'connected'} />
+          </View>
+        </View>
+        <TouchableOpacity onPress={onViewHistory} style={styles.historyButtonSmall}>
+          <Text style={styles.historyButtonTextSmall}>📋 Historial</Text>
+        </TouchableOpacity>
+      </View>
+
+      {activeTeam ? (
+        <>
+          <View style={[styles.teamCard, styles.teamCardActive]}>
+            <Text style={styles.teamLabel}>🎯 EQUIPO A EVALUAR</Text>
+            <Text style={styles.teamName}>{activeTeam.name}</Text>
+            <View style={styles.progressContainer}>
+              <Text style={styles.progressText}>
+                {evaluatedCount} de {totalCriteria} criterios evaluados
+              </Text>
+              <View style={styles.progressBar}>
+                <View 
+                  style={[
+                    styles.progressFill, 
+                    { width: `${(evaluatedCount / totalCriteria) * 100}%` }
+                  ]} 
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* Lista de Criterios */}
+          <View style={styles.criteriaSection}>
+            <Text style={styles.criteriaSectionTitle}>
+              📊 Evalúa todos los criterios (1-4 puntos cada uno)
+            </Text>
+            
+            {CRITERIA.map((criterion, index) => {
+              const selectedScore = criteriaScores[criterion.id];
+              const isEvaluated = selectedScore !== undefined;
+              
+              return (
+                <View key={criterion.id} style={styles.criterionEvalCard}>
+                  <View style={styles.criterionEvalHeader}>
+                    <View style={styles.criterionNumberBadge}>
+                      <Text style={styles.criterionNumber}>{index + 1}</Text>
+                    </View>
+                    <View style={styles.criterionEvalInfo}>
+                      <Text style={styles.criterionEvalName}>{criterion.name}</Text>
+                      <Text style={styles.criterionEvalDescription} numberOfLines={2}>
+                        {criterion.description}
+                      </Text>
+                    </View>
+                    {isEvaluated && (
+                      <View style={styles.evaluatedBadge}>
+                        <Text style={styles.evaluatedBadgeText}>✓</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Niveles de evaluación */}
+                  <View style={styles.levelsContainer}>
+                    {criterion.niveles && criterion.niveles.map((nivel) => (
+                      <TouchableOpacity
+                        key={nivel.nivel}
+                        style={[
+                          styles.levelButton,
+                          selectedScore === nivel.nivel && styles.levelButtonSelected,
+                        ]}
+                        onPress={() => onScoreChange(criterion.id, nivel.nivel)}
+                      >
+                        <View style={styles.levelButtonHeader}>
+                          <Text style={[
+                            styles.levelButtonNumber,
+                            selectedScore === nivel.nivel && styles.levelButtonNumberSelected,
+                          ]}>
+                            {nivel.nivel}
+                          </Text>
+                          <Text style={[
+                            styles.levelButtonName,
+                            selectedScore === nivel.nivel && styles.levelButtonNameSelected,
+                          ]}>
+                            {nivel.nombre}
+                          </Text>
+                        </View>
+                        <Text style={[
+                          styles.levelButtonDescription,
+                          selectedScore === nivel.nivel && styles.levelButtonDescriptionSelected,
+                        ]} numberOfLines={2}>
+                          {nivel.descripcion}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+
+          {/* Botón de envío */}
+          <TouchableOpacity
+            style={[
+              styles.submitAllButton,
+              !allEvaluated && styles.submitAllButtonDisabled,
+            ]}
+            onPress={onSubmitAll}
+            disabled={!allEvaluated}
+          >
+            <Text style={styles.submitAllButtonText}>
+              {allEvaluated 
+                ? '✅ ENVIAR EVALUACIÓN COMPLETA' 
+                : `⏳ FALTAN ${totalCriteria - evaluatedCount} CRITERIOS`
+              }
+            </Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <View style={styles.waitingContainer}>
+          <View style={styles.waitingCard}>
+            <Text style={styles.waitingIcon}>⏳</Text>
+            <Text style={styles.waitingTitle}>Esperando Siguiente Equipo</Text>
+            <Text style={styles.waitingDescription}>
+              El administrador enviará el próximo equipo a evaluar.{'\n'}
+              Mantente conectado.
+            </Text>
+            <View style={styles.waitingStatusContainer}>
+              <View style={styles.connectedDot} />
+              <Text style={styles.connectedText}>Conectado al Totem</Text>
+            </View>
+          </View>
+          
+          <View style={styles.waitingActions}>
+            <TouchableOpacity style={styles.historyButtonWaiting} onPress={onViewHistory}>
+              <Text style={styles.historyButtonWaitingText}>📋 Ver Historial</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.backToScanButton} onPress={onBack}>
+              <Text style={styles.backToScanButtonText}>🔄 Reconectar al Totem</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+
+// Pantalla de Evaluación (Antigua - mantener por compatibilidad)
 function EvaluationScreen({
   activeTeam,
   activeCriterion,
@@ -772,5 +973,266 @@ const styles = StyleSheet.create({
   historyItemDate: {
     fontSize: 12,
     color: '#999',
+  },
+  // Nuevos estilos para EvaluationScreenNew
+  headerContent: {
+    flex: 1,
+  },
+  backButtonSmall: {
+    marginBottom: 8,
+  },
+  progressContainer: {
+    marginTop: 15,
+  },
+  progressText: {
+    fontSize: 14,
+    color: '#2E7D32',
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  progressBar: {
+    height: 8,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#4CAF50',
+    borderRadius: 4,
+  },
+  criteriaSection: {
+    padding: 15,
+  },
+  criteriaSectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  criterionEvalCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 20,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+  },
+  criterionEvalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 15,
+  },
+  criterionNumberBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#2196F3',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  criterionNumber: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  criterionEvalInfo: {
+    flex: 1,
+  },
+  criterionEvalName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 5,
+  },
+  criterionEvalDescription: {
+    fontSize: 13,
+    color: '#666',
+    lineHeight: 18,
+  },
+  evaluatedBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#4CAF50',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  evaluatedBadgeText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  levelsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 5,
+  },
+  levelButton: {
+    flex: 1,
+    minWidth: '48%',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+  },
+  levelButtonSelected: {
+    backgroundColor: '#FFF3E0',
+    borderColor: '#FF9800',
+    borderWidth: 3,
+    elevation: 4,
+    shadowColor: '#FF9800',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+  },
+  levelButtonHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+    gap: 6,
+  },
+  levelButtonNumber: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#757575',
+    width: 28,
+    textAlign: 'center',
+  },
+  levelButtonNumberSelected: {
+    color: '#FF9800',
+  },
+  levelButtonName: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#333',
+    flex: 1,
+  },
+  levelButtonNameSelected: {
+    color: '#E65100',
+  },
+  levelButtonDescription: {
+    fontSize: 11,
+    color: '#666',
+    lineHeight: 15,
+  },
+  levelButtonDescriptionSelected: {
+    color: '#333',
+    fontWeight: '500',
+  },
+  submitAllButton: {
+    backgroundColor: '#4CAF50',
+    margin: 15,
+    padding: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  submitAllButtonDisabled: {
+    backgroundColor: '#BDBDBD',
+    elevation: 1,
+  },
+  submitAllButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  waitingContainer: {
+    flex: 1,
+    padding: 20,
+    justifyContent: 'center',
+  },
+  waitingCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 40,
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    marginBottom: 30,
+  },
+  waitingIcon: {
+    fontSize: 64,
+    marginBottom: 20,
+  },
+  waitingTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  waitingDescription: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 20,
+  },
+  waitingStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F5E9',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+  },
+  connectedDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#4CAF50',
+    marginRight: 10,
+  },
+  connectedText: {
+    color: '#2E7D32',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  waitingActions: {
+    gap: 12,
+  },
+  historyButtonWaiting: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#2196F3',
+  },
+  historyButtonWaitingText: {
+    color: '#2196F3',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  backToScanButton: {
+    backgroundColor: '#F5F5F5',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  backToScanButtonText: {
+    color: '#666',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

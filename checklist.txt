@@ -78,6 +78,56 @@ CHECKLIST - APP DE EVALUACIÓN PARA CONCURSOS
 [X] Implementar criterio: Prototipo del producto o servicio
 [X] Implementar criterio: Resumen financiero
 [X] Implementar criterio: Preguntas y respuestas ante los jueces
+[X] Actualizar rubrica con niveles detallados (1-4)
+[X] Implementar niveles con nombre y descripción por criterio
+
+┌─────────────────────────────────────────────────────────────┐
+│ FLUJO DE EVALUACIÓN COMPLETO                                │
+└─────────────────────────────────────────────────────────────┘
+[X] Implementar envío de equipo completo desde Totem
+[X] Deshabilitar equipos ya enviados (no clicables)
+[X] Mostrar lista completa de criterios en Judge
+[X] Permitir evaluación de todos los criterios a la vez
+[X] Validar que todos los criterios estén evaluados antes de enviar
+[X] Implementar evento Socket.io 'team:send-to-judges'
+[X] Implementar evento Socket.io 'team:received'
+[X] Actualizar esquema de BD con campo 'sentToJudges'
+[X] Actualizar esquema de BD con campo 'evaluationsCompleted'
+[X] Crear script de migración para equipos existentes
+
+┌─────────────────────────────────────────────────────────────┐
+│ ACTUALIZACIÓN EN TIEMPO REAL                                │
+└─────────────────────────────────────────────────────────────┘
+[X] Implementar envío de evaluaciones en batch (una sola vez)
+[X] Implementar evento 'evaluation:submit-batch'
+[X] Calcular promedios por criterio con todos los jueces
+[X] Recalcular puntaje final del equipo automáticamente
+[X] Emitir evento 'results:updated' a todos los clientes
+[X] Totem escucha 'results:updated' y actualiza ranking
+[X] Detectar cambio de primer lugar automáticamente
+[X] Reproducir sonido de celebración en cambio de líder
+[X] Confirmar recepción de evaluaciones al juez
+[X] Manejo de errores en envío de evaluaciones
+[X] Actualización automática sin recargar componente
+[X] Indicador visual "EN VIVO" con animación
+[X] Badge temporal "ACTUALIZANDO..." (2 segundos)
+[X] Timestamp de última actualización
+[X] Solución de bucle infinito de conexiones
+[X] Optimización de polling: 10s → 2s (5x más rápido)
+[X] Solicitud inmediata de datos al abrir pantalla
+[X] Totem se une a sala Socket.io para recibir eventos
+[X] Broadcast con respaldo global
+[X] Actualizaciones realmente instantáneas (< 1s)
+
+┌─────────────────────────────────────────────────────────────┐
+│ EXPERIENCIA DE USUARIO - MODO JUEZ                          │
+└─────────────────────────────────────────────────────────────┘
+[X] Mantener juez conectado después de evaluar
+[X] Pantalla de espera para siguiente equipo
+[X] Indicador de conexión activa al Totem
+[X] Botón de acceso rápido al historial
+[X] Opción de reconexión manual si es necesario
+[X] No forzar retorno a escaneo de QR
 
 ┌─────────────────────────────────────────────────────────────┐
 │ ANIMACIONES Y EFECTOS                                       │

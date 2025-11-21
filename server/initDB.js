@@ -22,6 +22,8 @@ const teamSchema = new mongoose.Schema({
     timestamp: Date,
     position: Number,
   }],
+  sentToJudges: { type: Boolean, default: false },
+  evaluationsCompleted: { type: Number, default: 0 },
 }, { timestamps: true });
 
 const criterionSchema = new mongoose.Schema({
