@@ -341,6 +341,52 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('system:reset-data', async (data) => {
+    try {
+      const { password, totemId } = data;
+      const CORRECT_PASSWORD = 'unachnegocios';
+      
+      console.log(`🔒 Solicitud de reset de datos recibida para totem: ${totemId}`);
+      
+      // Verificar contraseña
+      if (password !== CORRECT_PASSWORD) {
+        console.log('❌ Contraseña incorrecta en intento de reset');
+        socket.emit('system:reset-error', { error: 'Contraseña incorrecta' });
+        return;
+      }
+      
+      console.log('✅ Contraseña correcta - Iniciando limpieza de datos...');
+      
+      // Eliminar todos los datos de las colecciones
+      const evaluationsDeleted = await Evaluation.deleteMany({});
+      console.log(`🗑️ Evaluaciones eliminadas: ${evaluationsDeleted.deletedCount}`);
+      
+      const teamsDeleted = await Team.deleteMany({});
+      console.log(`🗑️ Equipos eliminados: ${teamsDeleted.deletedCount}`);
+      
+      const judgesDeleted = await Judge.deleteMany({});
+      console.log(`🗑️ Jueces eliminados: ${judgesDeleted.deletedCount}`);
+      
+      const totemsDeleted = await Totem.deleteMany({});
+      console.log(`🗑️ Totems eliminados: ${totemsDeleted.deletedCount}`);
+      
+      // Emitir confirmación de éxito
+      io.to(totemId).emit('system:reset-success', {});
+      io.emit('system:reset-success', {}); // Broadcast global
+      
+      console.log('✅ Sistema reseteado exitosamente');
+      console.log('📊 Resumen:');
+      console.log(`   - Evaluaciones: ${evaluationsDeleted.deletedCount}`);
+      console.log(`   - Equipos: ${teamsDeleted.deletedCount}`);
+      console.log(`   - Jueces: ${judgesDeleted.deletedCount}`);
+      console.log(`   - Totems: ${totemsDeleted.deletedCount}`);
+      
+    } catch (error) {
+      console.error('❌ Error al resetear datos:', error);
+      socket.emit('system:reset-error', { error: error.message });
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log('Cliente desconectado:', socket.id);
   });

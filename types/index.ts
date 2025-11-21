@@ -66,6 +66,7 @@ export interface SocketEvents {
   'team:add': Team;
   'team:list': { totemId: string };
   'team:send-to-judges': { totemId: string; teamId: string }; // Enviar equipo completo a jueces
+  'system:reset-data': { password: string; totemId: string }; // Resetear todos los datos
   
   // Servidor -> Cliente
   'totem:connected': { totemId: string }; // Confirmación de conexión del Totem
@@ -82,5 +83,7 @@ export interface SocketEvents {
   'evaluation:complete': { teamId: string; judgeId: string; finalScore: number; teamName: string }; // Confirmación de evaluación completa
   'evaluation:error': { error: string }; // Error al procesar evaluación
   'results:updated': { teams: Team[] };
+  'system:reset-success': {}; // Confirmación de reset exitoso
+  'system:reset-error': { error: string }; // Error al resetear
 }
 

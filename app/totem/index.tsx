@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Modal, Alert } from 'react-native';
 import { useEffect, useState, useRef } from 'react';
 import * as SystemUI from 'expo-system-ui';
 import { useRouter } from 'expo-router';
@@ -203,6 +203,39 @@ export default function TotemScreen() {
     socketService.emit('totem:change-criterion', { totemId, criterionId });
   };
 
+  const handleResetData = (password: string) => {
+    const CORRECT_PASSWORD = 'unachnegocios';
+    
+    if (password !== CORRECT_PASSWORD) {
+      Alert.alert('❌ Contraseña Incorrecta', 'La contraseña ingresada no es correcta.');
+      return false;
+    }
+
+    // Emitir evento para resetear datos en el servidor
+    socketService.emit('system:reset-data', { password, totemId });
+    
+    // Escuchar confirmación
+    socketService.on('system:reset-success', () => {
+      // Limpiar estado local
+      setTeams([]);
+      setActiveTeam(null);
+      setActiveCriterion(null);
+      
+      soundService.playNotificationSound();
+      Alert.alert(
+        '✅ Datos Reseteados',
+        'Todos los datos han sido eliminados exitosamente. El sistema está listo para un nuevo evento.',
+        [{ text: 'Entendido' }]
+      );
+    });
+
+    socketService.on('system:reset-error', (data: { error: string }) => {
+      Alert.alert('❌ Error', `No se pudieron resetear los datos: ${data.error}`);
+    });
+    
+    return true;
+  };
+
   if (currentScreen === 'welcome') {
     return (
       <View style={styles.welcomeContainer}>
@@ -244,6 +277,7 @@ export default function TotemScreen() {
         onSendTeamToJudges={handleSendTeamToJudges}
         onChangeTeam={handleChangeTeam}
         onChangeCriterion={handleChangeCriterion}
+        onResetData={handleResetData}
         onBack={() => setCurrentScreen('welcome')}
         onViewResults={() => setCurrentScreen('results')}
       />
@@ -273,6 +307,7 @@ function AdminPanel({
   onSendTeamToJudges,
   onChangeTeam,
   onChangeCriterion,
+  onResetData,
   onBack,
   onViewResults,
 }: {
@@ -283,10 +318,21 @@ function AdminPanel({
   onSendTeamToJudges: (teamId: string) => void;
   onChangeTeam: (teamId: string) => void;
   onChangeCriterion: (criterionId: string) => void;
+  onResetData: (password: string) => boolean;
   onBack: () => void;
   onViewResults: () => void;
 }) {
   const [newTeamName, setNewTeamName] = useState('');
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetPassword, setResetPassword] = useState('');
+
+  const handleConfirmReset = () => {
+    const success = onResetData(resetPassword);
+    if (success) {
+      setShowResetModal(false);
+      setResetPassword('');
+    }
+  };
 
   return (
     <ScrollView style={styles.adminContainer}>
@@ -382,6 +428,76 @@ function AdminPanel({
       <TouchableOpacity style={styles.resultsButton} onPress={onViewResults}>
         <Text style={styles.resultsButtonText}>📊 Ver Resultados en Tiempo Real</Text>
       </TouchableOpacity>
+
+      {/* Botón de Reset */}
+      <View style={styles.dangerZone}>
+        <Text style={styles.dangerZoneTitle}>⚠️ Zona Peligrosa</Text>
+        <Text style={styles.dangerZoneSubtitle}>
+          Resetear eliminará TODOS los datos (equipos, evaluaciones, jueces)
+        </Text>
+        <TouchableOpacity
+          style={styles.resetButton}
+          onPress={() => setShowResetModal(true)}
+        >
+          <Text style={styles.resetButtonText}>🗑️ RESETEAR SISTEMA</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Modal de Confirmación de Reset */}
+      <Modal
+        visible={showResetModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowResetModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>🔒 Resetear Sistema</Text>
+            <Text style={styles.modalDescription}>
+              Esta acción eliminará permanentemente:
+              {'\n'}• Todos los equipos
+              {'\n'}• Todas las evaluaciones
+              {'\n'}• Todos los jueces
+              {'\n'}• Configuraciones del totem
+              {'\n\n'}⚠️ Esta acción NO se puede deshacer
+            </Text>
+            
+            <Text style={styles.modalLabel}>Ingresa la contraseña:</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={resetPassword}
+              onChangeText={setResetPassword}
+              placeholder="Contraseña"
+              placeholderTextColor="#999"
+              secureTextEntry={true}
+              autoCapitalize="none"
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => {
+                  setShowResetModal(false);
+                  setResetPassword('');
+                }}
+              >
+                <Text style={styles.modalCancelButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.modalConfirmButton,
+                  !resetPassword && styles.modalConfirmButtonDisabled
+                ]}
+                onPress={handleConfirmReset}
+                disabled={!resetPassword}
+              >
+                <Text style={styles.modalConfirmButtonText}>Confirmar Reset</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -996,5 +1112,124 @@ const styles = StyleSheet.create({
   },
   sendButtonTextDisabled: {
     color: '#999',
+  },
+  dangerZone: {
+    backgroundColor: '#FFEBEE',
+    margin: 15,
+    padding: 20,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#EF5350',
+  },
+  dangerZoneTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#C62828',
+    marginBottom: 8,
+  },
+  dangerZoneSubtitle: {
+    fontSize: 13,
+    color: '#D32F2F',
+    marginBottom: 15,
+    lineHeight: 18,
+  },
+  resetButton: {
+    backgroundColor: '#D32F2F',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  },
+  resetButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#D32F2F',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalDescription: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  modalLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  modalInput: {
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#DDD',
+    borderRadius: 8,
+    padding: 14,
+    fontSize: 16,
+    color: '#333',
+    marginBottom: 20,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalCancelButton: {
+    flex: 1,
+    backgroundColor: '#F5F5F5',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#DDD',
+  },
+  modalCancelButtonText: {
+    color: '#666',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalConfirmButton: {
+    flex: 1,
+    backgroundColor: '#D32F2F',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalConfirmButtonDisabled: {
+    backgroundColor: '#FFCDD2',
+    opacity: 0.5,
+  },
+  modalConfirmButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

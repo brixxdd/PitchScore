@@ -130,6 +130,26 @@ CHECKLIST - APP DE EVALUACIÓN PARA CONCURSOS
 [X] No forzar retorno a escaneo de QR
 
 ┌─────────────────────────────────────────────────────────────┐
+│ SISTEMA DE RESET CON CONTRASEÑA                             │
+└─────────────────────────────────────────────────────────────┘
+[X] Botón de reset en Panel de Administración
+[X] Zona de peligro visualmente destacada
+[X] Modal de confirmación con advertencias
+[X] Input de contraseña protegido (secureTextEntry)
+[X] Validación de contraseña: "unachnegocios"
+[X] Validación en frontend y backend
+[X] Eliminación de colección Evaluations
+[X] Eliminación de colección Teams
+[X] Eliminación de colección Judges
+[X] Eliminación de colección Totems
+[X] Evento Socket.io 'system:reset-data'
+[X] Confirmación con 'system:reset-success'
+[X] Manejo de errores con 'system:reset-error'
+[X] Limpieza de estado local después de reset
+[X] Logs detallados en consola del servidor
+[X] Alerts informativos al usuario
+
+┌─────────────────────────────────────────────────────────────┐
 │ ANIMACIONES Y EFECTOS                                       │
 └─────────────────────────────────────────────────────────────┘
 [X] Instalar react-native-reanimated
