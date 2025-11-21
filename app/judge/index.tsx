@@ -28,20 +28,14 @@ export default function JudgeScreen() {
   const [criteriaScores, setCriteriaScores] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    // Cargar datos guardados
+    // Cargar datos guardados (solo para historial)
     const loadSavedData = async () => {
-      const savedJudgeId = await StorageService.getJudgeId();
-      const savedTotemId = await StorageService.getTotemId();
       const savedEvaluations = await StorageService.getEvaluations();
-
-      if (savedJudgeId) setJudgeId(savedJudgeId);
-      if (savedTotemId) setTotemId(savedTotemId);
       if (savedEvaluations) setEvaluations(savedEvaluations);
-
-      // Si ya hay conexión, ir a evaluación
-      if (savedJudgeId && savedTotemId) {
-        connectToTotem(savedTotemId, savedJudgeId);
-      }
+      
+      // NO cargar judgeId ni totemId guardados
+      // NO reconectar automáticamente - el usuario debe escanear QR cada vez
+      console.log('📱 Modo Juez iniciado - Listo para escanear QR');
     };
 
     loadSavedData();
@@ -103,15 +97,24 @@ export default function JudgeScreen() {
     connectSocket();
 
     return () => {
+      console.log('🔌 Desconectando Judge y limpiando datos...');
       socketService.disconnect();
+      
+      // Limpiar conexión (NO el historial de evaluaciones)
+      setTotemId(null);
+      setJudgeId(null);
+      setActiveTeam(null);
+      setActiveCriterion(null);
     };
   }, []);
 
   const connectToTotem = async (totemId: string, judgeId: string) => {
     setTotemId(totemId);
     setJudgeId(judgeId);
-    await StorageService.saveTotemId(totemId);
-    await StorageService.saveJudgeId(judgeId);
+    
+    // NO guardar en AsyncStorage para evitar reconexiones automáticas
+    // Solo mantener en memoria durante la sesión actual
+    console.log(`🔗 Conectando juez "${judgeId}" al totem "${totemId}"`);
 
     // Conectar juez al totem
     socketService.emit('judge:connect', { totemId, judgeId });
@@ -120,8 +123,17 @@ export default function JudgeScreen() {
     socketService.emit('team:list', { totemId });
 
     socketService.on('judge:connected', (data) => {
-      console.log('Juez conectado:', data);
+      console.log('✅ Juez conectado exitosamente:', data);
       setCurrentScreen('evaluate');
+    });
+
+    socketService.on('judge:connection-error', (data: { error: string }) => {
+      console.log('❌ Error de conexión:', data.error);
+      Alert.alert(
+        '❌ Error de Conexión',
+        data.error + '\n\nPor favor:\n1. Asegúrate de que el Modo Totem esté abierto\n2. Verifica que el QR sea válido\n3. Intenta escanear nuevamente',
+        [{ text: 'Entendido', onPress: () => setCurrentScreen('scan') }]
+      );
     });
   };
 

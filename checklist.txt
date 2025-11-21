@@ -141,7 +141,12 @@ CHECKLIST - APP DE EVALUACIÓN PARA CONCURSOS
 [X] Eliminación de colección Evaluations
 [X] Eliminación de colección Teams
 [X] Eliminación de colección Judges
-[X] Eliminación de colección Totems
+[X] Reset de colección Totems (no eliminados, solo limpiados)
+[X] Totem se auto-registra en BD al conectarse
+[X] Judge valida que Totem existe antes de conectarse
+[X] Judge NO crea Totem automáticamente (previene totems fantasma)
+[X] Manejo robusto de reconexiones después de reset
+[X] Mensaje de error claro si Judge escanea QR sin Totem activo
 [X] Evento Socket.io 'system:reset-data'
 [X] Confirmación con 'system:reset-success'
 [X] Manejo de errores con 'system:reset-error'
@@ -185,6 +190,19 @@ CHECKLIST - APP DE EVALUACIÓN PARA CONCURSOS
 [ ] Generar build separado para modo juez
 [ ] Implementar sistema de actualizaciones OTA
 [ ] Configurar variables de entorno
+
+┌─────────────────────────────────────────────────────────────┐
+│ SISTEMA DE EVALUACIÓN MÚLTIPLES JUECES                     │
+└─────────────────────────────────────────────────────────────┘
+[X] Sistema de SUMA (no promedio) entre jueces
+[X] Logs detallados del servidor para evaluaciones
+[X] Endpoint HTTP: GET /api/debug/evaluations
+[X] Endpoint HTTP: GET /api/debug/summary/:teamId
+[X] Logs de suma por criterio con desglose por juez
+[X] Logs de cálculo de puntaje final
+[X] Verificación de múltiples jueces evaluando
+[X] Documentación completa (DIAGNOSTICO_MULTIPLES_JUECES.md)
+[X] Documentación del sistema de suma (SISTEMA_SUMA_JUECES.md)
 
 ┌─────────────────────────────────────────────────────────────┐
 │ DOCUMENTACIÓN                                               │

@@ -71,6 +71,7 @@ export interface SocketEvents {
   // Servidor -> Cliente
   'totem:connected': { totemId: string }; // Confirmación de conexión del Totem
   'judge:connected': { judgeId: string; order: number };
+  'judge:connection-error': { error: string }; // Error al conectar Judge
   'team:updated': Team;
   'team:added': Team;
   'team:added:success': Team;

@@ -13,12 +13,12 @@ Se ha implementado un sistema de reset con contraseña para limpiar todos los da
 - Solo usuarios autorizados pueden resetear el sistema
 - Validación tanto en frontend como backend
 
-### ✅ **Eliminación Completa:**
-El reset elimina TODAS las siguientes colecciones:
-- ✅ **Evaluations** (evaluaciones de jueces)
-- ✅ **Teams** (equipos registrados)
-- ✅ **Judges** (jueces conectados)
-- ✅ **Totems** (configuraciones de totems)
+### ✅ **Limpieza Inteligente:**
+El reset limpia los siguientes datos:
+- ✅ **Evaluations** (eliminadas - todas las evaluaciones de jueces)
+- ✅ **Teams** (eliminados - todos los equipos registrados)
+- ✅ **Judges** (eliminados - todos los jueces conectados)
+- ✅ **Totems** (reseteados - NO eliminados, solo limpiados sus datos)
 
 ### ✅ **Interfaz Segura:**
 - Modal de confirmación con advertencia clara
@@ -254,13 +254,13 @@ if (password !== 'unachnegocios') {
 🗑️ Evaluaciones eliminadas: 15
 🗑️ Equipos eliminados: 3
 🗑️ Jueces eliminados: 5
-🗑️ Totems eliminados: 1
+🔄 Totems reseteados: 1 (no eliminados, solo limpiados)
 ✅ Sistema reseteado exitosamente
 📊 Resumen:
-   - Evaluaciones: 15
-   - Equipos: 3
-   - Jueces: 5
-   - Totems: 1
+   - Evaluaciones eliminadas: 15
+   - Equipos eliminados: 3
+   - Jueces eliminados: 5
+   - Totems reseteados: 1 (activos y listos)
 ```
 
 ---
@@ -287,6 +287,64 @@ Situación: Vas a usar la app en un nuevo evento
 Acción: Resetear datos del evento anterior
 Resultado: Sistema limpio para el nuevo evento
 ```
+
+---
+
+## 🔄 **Auto-Recuperación del Sistema**
+
+### **¿Qué pasa después del reset?**
+
+El sistema está diseñado para **auto-recuperarse** automáticamente:
+
+#### **1. Totem se Auto-Registra:**
+```javascript
+// Cuando el Totem se conecta
+socket.on('totem:connect', async (data) => {
+  // Crea o actualiza el Totem en la BD automáticamente
+  const totem = await Totem.findOneAndUpdate(
+    { id: totemId },
+    { id: totemId, status: 'active' },
+    { upsert: true }
+  );
+});
+```
+
+**Resultado:**
+- ✅ Totem se registra automáticamente al conectarse
+- ✅ No necesitas hacer nada manualmente
+- ✅ Funciona incluso si el reset eliminó el totem
+
+#### **2. Judge Valida que Totem Existe:**
+```javascript
+// Cuando un Judge intenta conectarse
+const totem = await Totem.findOne({ id: data.totemId });
+
+if (!totem) {
+  // NO crea el totem - envía error al Judge
+  socket.emit('judge:connection-error', { 
+    error: 'Totem no encontrado. Asegúrate de que el Totem esté activo.' 
+  });
+  return;
+}
+```
+
+**Resultado:**
+- ✅ Judge solo puede conectarse si el Totem está activo
+- ✅ NO crea Totems fantasma automáticamente
+- ✅ Muestra error claro al usuario si el Totem no existe
+- ✅ Previene conexiones inválidas
+
+#### **3. Totems NO se Eliminan:**
+
+El reset ahora:
+- ❌ **NO elimina** los Totems
+- ✅ **Solo limpia** sus datos (activeTeam, activeCriterion)
+- ✅ Los deja en estado 'idle' listos para usar
+
+**Ventaja:**
+- ✅ Después del reset, el Totem sigue existiendo en la BD
+- ✅ Los Judges pueden conectarse inmediatamente
+- ✅ No hay período de "totem no existe"
 
 ---
 

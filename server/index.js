@@ -16,6 +16,17 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
+// Ruta de inicio
+app.get('/', (req, res) => {
+  res.json({ 
+    status: 'PitchScore Backend Running',
+    endpoints: [
+      'GET /api/debug/evaluations - Ver todas las evaluaciones',
+      'GET /api/debug/summary/:teamId - Resumen de evaluaciones por equipo'
+    ]
+  });
+});
+
 // Conexión a MongoDB Atlas
 require('dotenv').config();
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://brianes666_db_user:dtpAGFfQnGEoIBH2@cluster0.mm6ktpy.mongodb.net/pitchscore?retryWrites=true&w=majority';
@@ -75,6 +86,94 @@ const Criterion = mongoose.model('Criterion', criterionSchema);
 const Evaluation = mongoose.model('Evaluation', evaluationSchema);
 const Totem = mongoose.model('Totem', totemSchema);
 
+// Endpoints de diagnóstico
+app.get('/api/debug/evaluations', async (req, res) => {
+  try {
+    const evaluations = await Evaluation.find().sort({ timestamp: -1 });
+    const teams = await Team.find();
+    const judges = await Judge.find();
+    
+    const report = {
+      totalEvaluations: evaluations.length,
+      totalTeams: teams.length,
+      totalJudges: judges.length,
+      teams: teams.map(team => ({
+        id: team.id,
+        name: team.name,
+        scores: team.scores,
+        finalScore: team.finalScore,
+        evaluationsCompleted: team.evaluationsCompleted || 0
+      })),
+      evaluationsByTeam: evaluations.reduce((acc, ev) => {
+        if (!acc[ev.teamId]) acc[ev.teamId] = [];
+        acc[ev.teamId].push({
+          judgeId: ev.judgeId,
+          criterionId: ev.criterionId,
+          score: ev.score,
+          timestamp: ev.timestamp
+        });
+        return acc;
+      }, {})
+    };
+    
+    res.json(report);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/debug/summary/:teamId', async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    const team = await Team.findOne({ id: teamId });
+    
+    if (!team) {
+      return res.status(404).json({ error: 'Equipo no encontrado' });
+    }
+    
+    const evaluations = await Evaluation.find({ teamId });
+    
+    // Agrupar por criterio
+    const byCriterion = {};
+    evaluations.forEach(ev => {
+      if (!byCriterion[ev.criterionId]) {
+        byCriterion[ev.criterionId] = [];
+      }
+      byCriterion[ev.criterionId].push({
+        judgeId: ev.judgeId,
+        score: ev.score,
+        timestamp: ev.timestamp
+      });
+    });
+    
+    const summary = {
+      team: {
+        id: team.id,
+        name: team.name,
+        finalScore: team.finalScore,
+        scores: team.scores
+      },
+      evaluationsByCriterion: Object.keys(byCriterion).map(criterionId => {
+        const evals = byCriterion[criterionId];
+        const total = evals.reduce((sum, e) => sum + e.score, 0);
+        return {
+          criterionId,
+          judgesCount: evals.length,
+          evaluations: evals,
+          totalSum: total,
+          storedInTeam: team.scores[criterionId] || 0,
+          note: 'storedInTeam debe ser igual a totalSum (suma de todos los jueces)'
+        };
+      }),
+      totalEvaluations: evaluations.length
+    };
+    
+    res.json(summary);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Socket.io events
 io.on('connection', (socket) => {
   console.log('Cliente conectado:', socket.id);
@@ -83,8 +182,21 @@ io.on('connection', (socket) => {
   socket.on('totem:connect', async (data) => {
     try {
       const { totemId } = data;
+      
+      // Crear o actualizar el Totem en la BD
+      const totem = await Totem.findOneAndUpdate(
+        { id: totemId },
+        {
+          id: totemId,
+          status: 'active',
+          activeTeam: null,
+          activeCriterion: null,
+        },
+        { upsert: true, new: true }
+      );
+      
       socket.join(totemId);
-      console.log(`🖥️ Totem "${totemId}" conectado y unido a su sala`);
+      console.log(`🖥️ Totem "${totemId}" conectado, registrado en BD y unido a su sala`);
       socket.emit('totem:connected', { totemId });
     } catch (error) {
       console.error('Error en totem:connect:', error);
@@ -93,6 +205,18 @@ io.on('connection', (socket) => {
 
   socket.on('judge:connect', async (data) => {
     try {
+      // Verificar que el totem existe
+      const totem = await Totem.findOne({ id: data.totemId });
+      
+      if (!totem) {
+        console.log(`❌ Juez "${data.judgeId}" intentó conectarse a totem "${data.totemId}" que NO existe`);
+        socket.emit('judge:connection-error', { 
+          error: 'Totem no encontrado. Asegúrate de que el Totem esté activo y mostrando el QR.' 
+        });
+        return;
+      }
+
+      // Crear o actualizar el juez
       const judge = await Judge.findOneAndUpdate(
         { id: data.judgeId },
         {
@@ -104,12 +228,17 @@ io.on('connection', (socket) => {
       );
 
       socket.join(data.totemId);
+      console.log(`✅ Juez "${data.judgeId}" conectado al totem "${data.totemId}"`);
+      
       socket.emit('judge:connected', {
         judgeId: data.judgeId,
         order: judge.order || 0,
       });
     } catch (error) {
       console.error('Error en judge:connect:', error);
+      socket.emit('judge:connection-error', { 
+        error: 'Error al conectar con el servidor' 
+      });
     }
   });
 
@@ -118,7 +247,12 @@ io.on('connection', (socket) => {
     try {
       const { teamId, judgeId, evaluations: judgeEvaluations } = data;
       
-      console.log(`📊 Procesando ${judgeEvaluations.length} evaluaciones del juez ${judgeId} para equipo ${teamId}`);
+      console.log(`\n${'='.repeat(60)}`);
+      console.log(`📊 NUEVA EVALUACIÓN RECIBIDA`);
+      console.log(`   Juez: ${judgeId}`);
+      console.log(`   Equipo: ${teamId}`);
+      console.log(`   Criterios evaluados: ${judgeEvaluations.length}`);
+      console.log(`${'='.repeat(60)}\n`);
 
       // Guardar todas las evaluaciones
       const savedEvaluations = [];
@@ -141,31 +275,47 @@ io.on('connection', (socket) => {
         return;
       }
 
-      // Para cada criterio evaluado, calcular el promedio
+      // Para cada criterio evaluado, SUMAR las puntuaciones de TODOS los jueces
       for (const evalData of judgeEvaluations) {
         const allEvaluationsForCriterion = await Evaluation.find({
           teamId,
           criterionId: evalData.criterionId,
         });
 
-        const avgScore =
-          allEvaluationsForCriterion.reduce((sum, e) => sum + e.score, 0) / 
-          allEvaluationsForCriterion.length;
+        console.log(`📊 Criterio ${evalData.criterionId}: ${allEvaluationsForCriterion.length} evaluaciones encontradas`);
+        
+        // Mostrar las evaluaciones de cada juez
+        allEvaluationsForCriterion.forEach(ev => {
+          console.log(`  - Juez ${ev.judgeId}: ${ev.score} puntos`);
+        });
 
-        team.scores[evalData.criterionId] = avgScore;
+        // SUMAR (no promediar) los puntajes de todos los jueces
+        const totalScore = allEvaluationsForCriterion.reduce((sum, e) => sum + e.score, 0);
+
+        console.log(`  ➡️ Suma total calculada: ${totalScore} puntos`);
+
+        team.scores[evalData.criterionId] = totalScore;
       }
 
-      // Recalcular puntaje final
+      // Recalcular puntaje final (suma de todas las puntuaciones de todos los jueces)
+      console.log(`\n🔢 Calculando puntaje final para "${team.name}":`);
+      console.log(`   Scores por criterio (sumados entre jueces):`, team.scores);
+      
       const finalScore = Object.values(team.scores).reduce(
         (sum, score) => sum + score,
         0
       );
+      
+      const numCriteria = Object.keys(team.scores).length;
+      console.log(`   Total de criterios evaluados: ${numCriteria}`);
+      console.log(`   PUNTAJE FINAL (suma de todos los jueces): ${finalScore} puntos\n`);
+      
       team.finalScore = finalScore;
       team.evaluationsCompleted = (team.evaluationsCompleted || 0) + 1;
       
       await team.save();
 
-      console.log(`✅ Equipo "${team.name}" actualizado: ${finalScore.toFixed(2)} puntos`);
+      console.log(`✅ Equipo "${team.name}" actualizado: ${finalScore.toFixed(2)} puntos totales`);
 
       // Obtener TODOS los equipos ordenados para enviar el ranking completo
       const allTeams = await Team.find({ totemId: team.totemId }).sort({ finalScore: -1 });
@@ -213,12 +363,12 @@ io.on('connection', (socket) => {
         criterionId: data.criterionId,
       });
 
-      const avgScore =
-        evaluations.reduce((sum, e) => sum + e.score, 0) / evaluations.length;
+      // SUMAR (no promediar) los puntajes de todos los jueces
+      const totalScore = evaluations.reduce((sum, e) => sum + e.score, 0);
 
       const team = await Team.findOne({ id: data.teamId });
       if (team) {
-        team.scores[data.criterionId] = avgScore;
+        team.scores[data.criterionId] = totalScore;
         const finalScore = Object.values(team.scores).reduce(
           (sum, score) => sum + score,
           0
@@ -367,8 +517,18 @@ io.on('connection', (socket) => {
       const judgesDeleted = await Judge.deleteMany({});
       console.log(`🗑️ Jueces eliminados: ${judgesDeleted.deletedCount}`);
       
-      const totemsDeleted = await Totem.deleteMany({});
-      console.log(`🗑️ Totems eliminados: ${totemsDeleted.deletedCount}`);
+      // NO eliminar totems, solo resetear sus datos
+      const totemsReset = await Totem.updateMany(
+        {},
+        {
+          $set: {
+            activeTeam: null,
+            activeCriterion: null,
+            status: 'idle',
+          }
+        }
+      );
+      console.log(`🔄 Totems reseteados: ${totemsReset.modifiedCount} (no eliminados, solo limpiados)`);
       
       // Emitir confirmación de éxito
       io.to(totemId).emit('system:reset-success', {});
@@ -376,10 +536,10 @@ io.on('connection', (socket) => {
       
       console.log('✅ Sistema reseteado exitosamente');
       console.log('📊 Resumen:');
-      console.log(`   - Evaluaciones: ${evaluationsDeleted.deletedCount}`);
-      console.log(`   - Equipos: ${teamsDeleted.deletedCount}`);
-      console.log(`   - Jueces: ${judgesDeleted.deletedCount}`);
-      console.log(`   - Totems: ${totemsDeleted.deletedCount}`);
+      console.log(`   - Evaluaciones eliminadas: ${evaluationsDeleted.deletedCount}`);
+      console.log(`   - Equipos eliminados: ${teamsDeleted.deletedCount}`);
+      console.log(`   - Jueces eliminados: ${judgesDeleted.deletedCount}`);
+      console.log(`   - Totems reseteados: ${totemsReset.modifiedCount} (activos y listos)`);
       
     } catch (error) {
       console.error('❌ Error al resetear datos:', error);
