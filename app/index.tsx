@@ -10,7 +10,7 @@ export default function HomeScreen() {
 
   return (
     <LinearGradient
-      colors={['#fbe249', '#f4a261', '#e76f51']}
+      colors={['#0a2f2a', '#1a4d44', '#2a6a5e']}
       style={styles.container}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
@@ -32,7 +32,7 @@ export default function HomeScreen() {
             onPress={() => router.push('/totem')}
           >
             <LinearGradient
-              colors={['#2a9d8f', '#43cea2']}
+              colors={['#5dbba7', '#7fd1bf']}
               style={styles.button}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
@@ -50,7 +50,7 @@ export default function HomeScreen() {
             onPress={() => router.push('/judge')}
           >
             <LinearGradient
-              colors={['#e63946', '#d62828']}
+              colors={['#3a9989', '#5dbba7']}
               style={styles.button}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}

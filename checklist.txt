@@ -205,6 +205,21 @@ CHECKLIST - APP DE EVALUACIÓN PARA CONCURSOS
 [X] Documentación del sistema de suma (SISTEMA_SUMA_JUECES.md)
 
 ┌─────────────────────────────────────────────────────────────┐
+│ DISEÑO Y UI                                                 │
+└─────────────────────────────────────────────────────────────┘
+[X] Nuevo esquema de colores con #5dbba7
+[X] Rediseño de pantalla principal con gradientes
+[X] Rediseño de QR container con sombras y bordes
+[X] Rediseño del panel de administración
+[X] Mejora de inputs y botones con nuevo estilo
+[X] Actualización de lista de equipos con mejor diseño
+[X] Rediseño de pantalla de resultados
+[X] Mejora de badges de posición con sombras
+[X] Estilo especial para primer lugar (dorado)
+[X] Actualización de pantalla de juez con colores
+[X] Documentación completa del diseño (REDISENO_UI.md)
+
+┌─────────────────────────────────────────────────────────────┐
 │ DOCUMENTACIÓN                                               │
 └─────────────────────────────────────────────────────────────┘
 [ ] Documentación para administradores del concurso
