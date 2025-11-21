@@ -2,6 +2,7 @@ import { Stack } from 'expo-router';
 import { useEffect } from 'react';
 import * as SystemUI from 'expo-system-ui';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 export default function RootLayout() {
   useEffect(() => {
@@ -10,7 +11,7 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <>
+    <SafeAreaProvider>
       <StatusBar style="auto" />
       <Stack
         screenOptions={{
@@ -21,7 +22,7 @@ export default function RootLayout() {
         <Stack.Screen name="totem" />
         <Stack.Screen name="judge" />
       </Stack>
-    </>
+    </SafeAreaProvider>
   );
 }
 
