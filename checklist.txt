@@ -1,0 +1,132 @@
+═══════════════════════════════════════════════════════════════
+CHECKLIST - APP DE EVALUACIÓN PARA CONCURSOS
+═══════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────┐
+│ CONFIGURACIÓN INICIAL DEL PROYECTO                          │
+└─────────────────────────────────────────────────────────────┘
+[X] Configurar proyecto Expo con EAS
+[X] Configurar estructura de carpetas del proyecto
+[X] Configurar dependencias básicas (React Native, Expo)
+[X] Configurar Expo Router para navegación
+[X] Configurar modo kiosko (expo-system-ui)
+
+┌─────────────────────────────────────────────────────────────┐
+│ BASE DE DATOS Y BACKEND                                     │
+└─────────────────────────────────────────────────────────────┘
+[X] Configurar MongoDB Atlas
+[X] Crear colección: judges
+[X] Crear colección: teams
+[X] Crear colección: criteria
+[X] Crear colección: evaluations
+[X] Crear colección: totems
+[X] Script de inicialización de BD con datos por defecto
+[X] Configurar Node.js/Express backend
+[X] Implementar Socket.io server
+[X] Implementar Socket.io cliente en React Native
+[X] Configurar conexión en tiempo real con reintentos automáticos
+[X] Implementar cache local para desconexión
+
+┌─────────────────────────────────────────────────────────────┐
+│ SISTEMA DE QR                                               │
+└─────────────────────────────────────────────────────────────┘
+[X] Instalar react-native-qrcode-svg
+[X] Implementar generación de QR en totem
+[X] Implementar token efímero (válido 5 minutos)
+[X] Implementar escaneo de QR en modo juez
+[X] Implementar conexión de juez al totem vía QR
+[X] Implementar cambio de equipo/criterio vía QR
+
+┌─────────────────────────────────────────────────────────────┐
+│ MODO TOTEM (KIOSKO)                                         │
+└─────────────────────────────────────────────────────────────┘
+[X] Pantalla inicial con QR para conexión de jueces
+[X] Panel de administración
+    [X] Formulario para registrar equipos
+    [X] Selector de aspecto de evaluación activo
+    [X] Controles para avanzar entre equipos
+    [X] Controles para avanzar entre criterios
+[X] Visualización de resultados en tiempo real
+    [X] Tabla clasificatoria con colores distintivos
+    [X] Mostrar puntaje promedio por criterio
+    [X] Mostrar puntaje total
+[X] Implementar modo pantalla completa (kiosko)
+[X] Ocultar controles de navegación en modo totem
+
+┌─────────────────────────────────────────────────────────────┐
+│ MODO JUEZ                                                    │
+└─────────────────────────────────────────────────────────────┘
+[X] Pantalla de escaneo de QR del totem
+[X] Pantalla de evaluación
+    [X] Mostrar nombre del equipo actual
+    [X] Mostrar criterio a evaluar
+    [X] Sistema de puntuación visual (1-4 estrellas o botones)
+    [X] Indicador de jueces faltantes por evaluar
+    [X] Botón de envío de evaluación
+[X] Historial de evaluaciones propias
+[X] Notificaciones push para cambios de criterio/equipo
+
+┌─────────────────────────────────────────────────────────────┐
+│ RÚBRICA DE EVALUACIÓN                                       │
+└─────────────────────────────────────────────────────────────┘
+[X] Implementar criterio: Problema y necesidad del mercado
+[X] Implementar criterio: Propuesta única de valor e impacto
+[X] Implementar criterio: Perfil del cliente ideal y tamaño del mercado
+[X] Implementar criterio: Estrategia de mercadotecnia
+[X] Implementar criterio: Análisis de la competencia
+[X] Implementar criterio: Metas a corto y mediano plazo
+[X] Implementar criterio: Prototipo del producto o servicio
+[X] Implementar criterio: Resumen financiero
+[X] Implementar criterio: Preguntas y respuestas ante los jueces
+
+┌─────────────────────────────────────────────────────────────┐
+│ ANIMACIONES Y EFECTOS                                       │
+└─────────────────────────────────────────────────────────────┘
+[X] Instalar react-native-reanimated
+[X] Animaciones de entrada/salida
+[X] Animación de escalado cuando equipo sube de posición
+[X] Efecto visual en cambios de puntuación
+[X] Indicadores visuales de conexión (colores según estado)
+[X] Instalar expo-av para sonidos
+[X] Sonido cuando juez completa evaluación
+[X] Sonido de celebración al alcanzar primer puesto
+[X] Sonido de notificación al cambiar equipo/criterio
+
+┌─────────────────────────────────────────────────────────────┐
+│ AUTENTICACIÓN Y SEGURIDAD                                   │
+└─────────────────────────────────────────────────────────────┘
+[X] Implementar sistema de tokens efímeros por QR
+[X] Validar expiración de tokens (5 minutos)
+[X] Implementar validación de conexión de jueces
+
+┌─────────────────────────────────────────────────────────────┐
+│ OPTIMIZACIÓN Y UX                                           │
+└─────────────────────────────────────────────────────────────┘
+[ ] Diseño responsivo para distintos tamaños de pantalla
+[ ] Optimización de batería para dispositivos de jueces
+[X] Manejo de errores y estados de carga
+[X] Feedback visual en todas las acciones
+
+┌─────────────────────────────────────────────────────────────┐
+│ DESPLIEGUE                                                  │
+└─────────────────────────────────────────────────────────────┘
+[ ] Configurar EAS para builds de producción
+[ ] Generar build separado para modo totem
+[ ] Generar build separado para modo juez
+[ ] Implementar sistema de actualizaciones OTA
+[ ] Configurar variables de entorno
+
+┌─────────────────────────────────────────────────────────────┐
+│ DOCUMENTACIÓN                                               │
+└─────────────────────────────────────────────────────────────┘
+[ ] Documentación para administradores del concurso
+[ ] README con instrucciones de instalación
+[ ] Guía de uso del modo totem
+[ ] Guía de uso del modo juez
+
+═══════════════════════════════════════════════════════════════
+NOTAS:
+- Marcar con [X] cuando una tarea esté completada
+- Agregar notas adicionales debajo de cada sección si es necesario
+═══════════════════════════════════════════════════════════════
+

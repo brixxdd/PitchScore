@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "PitchScore",
+    "slug": "pitchscore",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#2196F3"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.pitchscore.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#2196F3"
+      },
+      "package": "com.pitchscore.app"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-system-ui",
+        {
+          "statusBarStyle": "auto"
+        }
+      ]
+    ],
+    "scheme": "pitchscore",
+    "extra": {
+      "eas": {
+        "projectId": ""
+      }
+    }
+  }
+}
+
