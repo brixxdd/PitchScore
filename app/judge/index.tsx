@@ -709,11 +709,11 @@ function HistoryScreen({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#e8f5f2',
+    backgroundColor: '#f0f9f7',
   },
   container: {
     flex: 1,
-    backgroundColor: '#e8f5f2',
+    backgroundColor: '#f0f9f7',
   },
   header: {
     backgroundColor: '#5dbba7',
@@ -743,11 +743,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   historyButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#5dbba7',
     padding: 15,
     margin: 20,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
+    shadowColor: '#5dbba7',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 5,
   },
   historyButtonText: {
     color: '#fff',
@@ -756,15 +761,20 @@ const styles = StyleSheet.create({
   },
   evaluateContainer: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f0f9f7',
   },
   evaluateHeader: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#5dbba7',
     padding: 20,
     paddingTop: 60,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    shadowColor: '#5dbba7',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   evaluateTitle: {
     fontSize: 24,
@@ -791,9 +801,9 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   teamCardActive: {
-    backgroundColor: '#E8F5E9',
+    backgroundColor: '#e8f5f2',
     borderWidth: 2,
-    borderColor: '#4CAF50',
+    borderColor: '#5dbba7',
   },
   teamLabel: {
     fontSize: 12,
@@ -805,11 +815,11 @@ const styles = StyleSheet.create({
   teamName: {
     fontSize: 26,
     fontWeight: 'bold',
-    color: '#2E7D32',
+    color: '#0a2f2a',
   },
   statusBadge: {
     marginTop: 12,
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#5dbba7',
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 20,
@@ -835,9 +845,9 @@ const styles = StyleSheet.create({
     borderLeftColor: '#a0d9cd',
   },
   criterionCardActive: {
-    backgroundColor: '#E3F2FD',
+    backgroundColor: '#e8f5f2',
     borderWidth: 2,
-    borderColor: '#2196F3',
+    borderColor: '#5dbba7',
   },
   criterionLabel: {
     fontSize: 12,
@@ -849,7 +859,7 @@ const styles = StyleSheet.create({
   criterionName: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#1565C0',
+    color: '#0a2f2a',
     marginBottom: 10,
   },
   criterionDescription: {
@@ -859,7 +869,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   maxScoreBadge: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#5dbba7',
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 20,
@@ -912,11 +922,11 @@ const styles = StyleSheet.create({
     borderColor: '#E0E0E0',
   },
   rubricLevelSelected: {
-    backgroundColor: '#FFF3E0',
-    borderColor: '#FF9800',
+    backgroundColor: '#e8f5f2',
+    borderColor: '#5dbba7',
     borderWidth: 3,
     elevation: 3,
-    shadowColor: '#FF9800',
+    shadowColor: '#5dbba7',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -935,7 +945,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   rubricLevelNumberSelected: {
-    color: '#FF9800',
+    color: '#5dbba7',
   },
   rubricLevelName: {
     fontSize: 18,
@@ -944,7 +954,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   rubricLevelNameSelected: {
-    color: '#E65100',
+    color: '#0a2f2a',
   },
   rubricLevelDescription: {
     fontSize: 14,
@@ -957,18 +967,18 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   instructionCard: {
-    backgroundColor: '#FFF9C4',
+    backgroundColor: '#f0f9f7',
     margin: 15,
     marginTop: 0,
     padding: 20,
     borderRadius: 12,
     borderLeftWidth: 4,
-    borderLeftColor: '#FBC02D',
+    borderLeftColor: '#5dbba7',
   },
   instructionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#F57F17',
+    color: '#3a9989',
     marginBottom: 12,
   },
   instructionText: {
@@ -977,17 +987,17 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   pendingCard: {
-    backgroundColor: '#FFF3E0',
+    backgroundColor: '#e8f5f2',
     margin: 15,
     marginTop: 0,
     padding: 15,
     borderRadius: 8,
     borderLeftWidth: 4,
-    borderLeftColor: '#FF9800',
+    borderLeftColor: '#5dbba7',
   },
   pendingText: {
     fontSize: 14,
-    color: '#E65100',
+    color: '#0a2f2a',
     textAlign: 'center',
   },
   submitButton: {
@@ -1009,14 +1019,19 @@ const styles = StyleSheet.create({
   },
   historyContainer: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f0f9f7',
   },
   historyHeader: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#5dbba7',
     padding: 20,
     paddingTop: 60,
     flexDirection: 'row',
     alignItems: 'center',
+    shadowColor: '#5dbba7',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   historyTitle: {
     fontSize: 24,
@@ -1068,7 +1083,7 @@ const styles = StyleSheet.create({
   historyItemScore: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#2196F3',
+    color: '#5dbba7',
   },
   historyItemDate: {
     fontSize: 12,
@@ -1086,7 +1101,7 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 14,
-    color: '#2E7D32',
+    color: '#0a2f2a',
     fontWeight: '600',
     marginBottom: 8,
   },
@@ -1098,7 +1113,7 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#5dbba7',
     borderRadius: 4,
   },
   criteriaSection: {
@@ -1133,7 +1148,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#2196F3',
+    backgroundColor: '#5dbba7',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -1161,7 +1176,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#5dbba7',
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,
@@ -1187,11 +1202,11 @@ const styles = StyleSheet.create({
     borderColor: '#E0E0E0',
   },
   levelButtonSelected: {
-    backgroundColor: '#FFF3E0',
-    borderColor: '#FF9800',
+    backgroundColor: '#e8f5f2',
+    borderColor: '#5dbba7',
     borderWidth: 3,
     elevation: 4,
-    shadowColor: '#FF9800',
+    shadowColor: '#5dbba7',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 3,
@@ -1210,7 +1225,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   levelButtonNumberSelected: {
-    color: '#FF9800',
+    color: '#5dbba7',
   },
   levelButtonName: {
     fontSize: 13,
@@ -1219,7 +1234,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   levelButtonNameSelected: {
-    color: '#E65100',
+    color: '#0a2f2a',
   },
   levelButtonDescription: {
     fontSize: 11,
@@ -1231,13 +1246,13 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   submitAllButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#5dbba7',
     margin: 15,
     padding: 20,
     borderRadius: 12,
     alignItems: 'center',
     elevation: 4,
-    shadowColor: '#000',
+    shadowColor: '#5dbba7',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -1255,18 +1270,21 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
     justifyContent: 'center',
+    backgroundColor: '#f0f9f7',
   },
   waitingCard: {
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 40,
     alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
+    elevation: 6,
+    shadowColor: '#5dbba7',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
     marginBottom: 30,
+    borderWidth: 2,
+    borderColor: '#e8f5f2',
   },
   waitingIcon: {
     fontSize: 64,
@@ -1275,7 +1293,7 @@ const styles = StyleSheet.create({
   waitingTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#0a2f2a',
     marginBottom: 12,
     textAlign: 'center',
   },
@@ -1289,7 +1307,7 @@ const styles = StyleSheet.create({
   waitingStatusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E8F5E9',
+    backgroundColor: '#e8f5f2',
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 20,
@@ -1298,11 +1316,11 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#5dbba7',
     marginRight: 10,
   },
   connectedText: {
-    color: '#2E7D32',
+    color: '#0a2f2a',
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1315,10 +1333,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#2196F3',
+    borderColor: '#5dbba7',
+    elevation: 2,
+    shadowColor: '#5dbba7',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
   historyButtonWaitingText: {
-    color: '#2196F3',
+    color: '#5dbba7',
     fontSize: 16,
     fontWeight: '600',
   },
