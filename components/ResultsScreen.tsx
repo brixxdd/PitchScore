@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
+// @ts-ignore
+import * as Print from 'expo-print';
+// @ts-ignore
+import * as Sharing from 'expo-sharing';
 import { Team } from '../types';
 import { CRITERIA } from '../config/constants';
 import { socketService } from '../services/socket';
@@ -22,6 +26,7 @@ export default function ResultsScreen({
   const previousPositionsRef = useRef<Map<string, number>>(new Map());
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [dotOpacity, setDotOpacity] = useState<number>(1);
+  const [isExporting, setIsExporting] = useState<boolean>(false);
 
   // Actualizar timestamp (sin indicador visual de carga)
   useEffect(() => {
@@ -65,6 +70,258 @@ export default function ResultsScreen({
     previousPositionsRef.current = newPositions;
   }, [teams]);
 
+  // Función para exportar PDF con desglose detallado
+  const handleExportPDF = async () => {
+    try {
+      setIsExporting(true);
+      
+      // Obtener datos detallados del servidor
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/debug/evaluations`);
+      const data = await response.json();
+      
+      // Generar HTML para el PDF
+      const html = generatePDFHTML(data, teams);
+      
+      // Crear PDF
+      const { uri } = await Print.printToFileAsync({ html });
+      
+      // Compartir PDF
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: 'Reporte de Evaluaciones - PitchScore',
+          UTI: 'com.adobe.pdf'
+        });
+      } else {
+        Alert.alert('✅ PDF Generado', `PDF guardado en: ${uri}`);
+      }
+      
+      Alert.alert('✅ Éxito', 'Reporte exportado correctamente');
+    } catch (error) {
+      console.error('Error al exportar PDF:', error);
+      Alert.alert('❌ Error', 'No se pudo generar el reporte PDF');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Generar HTML para el PDF
+  const generatePDFHTML = (data: any, teams: Team[]) => {
+    const now = new Date();
+    const fecha = now.toLocaleDateString('es-ES', { 
+      day: '2-digit', 
+      month: 'long', 
+      year: 'numeric' 
+    });
+    const hora = now.toLocaleTimeString('es-ES');
+
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              padding: 30px;
+              color: #0a2f2a;
+            }
+            .header {
+              text-align: center;
+              margin-bottom: 30px;
+              border-bottom: 3px solid #5dbba7;
+              padding-bottom: 20px;
+            }
+            .header h1 {
+              color: #5dbba7;
+              margin: 0;
+              font-size: 32px;
+            }
+            .header .subtitle {
+              color: #666;
+              margin-top: 5px;
+              font-size: 14px;
+            }
+            .summary {
+              background: #f0f9f7;
+              padding: 15px;
+              border-radius: 8px;
+              margin-bottom: 25px;
+            }
+            .summary-item {
+              display: inline-block;
+              margin-right: 30px;
+              font-weight: bold;
+            }
+            .team-section {
+              margin-bottom: 40px;
+              page-break-inside: avoid;
+            }
+            .team-header {
+              background: #5dbba7;
+              color: white;
+              padding: 12px;
+              border-radius: 6px;
+              margin-bottom: 15px;
+              font-size: 18px;
+              font-weight: bold;
+            }
+            .position-badge {
+              background: #0a2f2a;
+              color: white;
+              padding: 4px 12px;
+              border-radius: 20px;
+              font-size: 14px;
+              margin-left: 10px;
+            }
+            .final-score {
+              float: right;
+              background: white;
+              color: #5dbba7;
+              padding: 4px 15px;
+              border-radius: 20px;
+              font-weight: bold;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-bottom: 15px;
+            }
+            th {
+              background: #e8f5f2;
+              padding: 10px;
+              text-align: left;
+              border: 1px solid #d0e9e3;
+              font-size: 12px;
+            }
+            td {
+              padding: 8px 10px;
+              border: 1px solid #e0e0e0;
+              font-size: 11px;
+            }
+            .criterion-name {
+              font-weight: bold;
+              color: #0a2f2a;
+            }
+            .judge-score {
+              text-align: center;
+              font-weight: 600;
+            }
+            .total-row {
+              background: #fff9e6;
+              font-weight: bold;
+            }
+            .footer {
+              margin-top: 40px;
+              text-align: center;
+              color: #999;
+              font-size: 11px;
+              border-top: 1px solid #ddd;
+              padding-top: 20px;
+            }
+            .first-place {
+              border: 3px solid #ffd700;
+              background: #fffbf0;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>🎯 PitchScore - Reporte de Evaluaciones</h1>
+            <div class="subtitle">
+              Generado el ${fecha} a las ${hora}
+            </div>
+          </div>
+
+          <div class="summary">
+            <span class="summary-item">📊 Total de Equipos: ${data.totalTeams}</span>
+            <span class="summary-item">⚖️ Total de Jueces: ${data.totalJudges}</span>
+            <span class="summary-item">📝 Total de Evaluaciones: ${data.totalEvaluations}</span>
+          </div>
+
+          ${teams.map((team, index) => {
+            const evaluations = data.evaluationsByTeam[team.id] || [];
+            const juecesUnicos = [...new Set(evaluations.map((e: any) => e.judgeId))];
+            
+            // Agrupar por criterio
+            const porCriterio: any = {};
+            CRITERIA.forEach(criterion => {
+              porCriterio[criterion.id] = {
+                name: criterion.name,
+                scores: juecesUnicos.map(judgeId => {
+                  const eval_found = evaluations.find((e: any) => 
+                    e.criterionId === criterion.id && e.judgeId === judgeId
+                  );
+                  return eval_found ? eval_found.score : 0;
+                }),
+                total: 0
+              };
+              porCriterio[criterion.id].total = porCriterio[criterion.id].scores.reduce((a: number, b: number) => a + b, 0);
+            });
+
+            return `
+              <div class="team-section ${index === 0 ? 'first-place' : ''}">
+                <div class="team-header">
+                  <span class="position-badge">#${index + 1}</span>
+                  ${team.name}
+                  <span class="final-score">${team.finalScore.toFixed(2)} pts</span>
+                </div>
+
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Criterio</th>
+                      ${juecesUnicos.map((judgeId, idx) => `
+                        <th style="text-align: center;">Juez ${idx + 1}</th>
+                      `).join('')}
+                      <th style="text-align: center; background: #5dbba7; color: white;">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${CRITERIA.map(criterion => {
+                      const datos = porCriterio[criterion.id];
+                      return `
+                        <tr>
+                          <td class="criterion-name">${criterion.name}</td>
+                          ${datos.scores.map((score: number) => `
+                            <td class="judge-score">${score > 0 ? score : '-'}</td>
+                          `).join('')}
+                          <td class="judge-score" style="background: #e8f5f2; font-weight: bold;">
+                            ${datos.total}
+                          </td>
+                        </tr>
+                      `;
+                    }).join('')}
+                    <tr class="total-row">
+                      <td><strong>TOTAL</strong></td>
+                      ${juecesUnicos.map(judgeId => {
+                        const totalJuez = CRITERIA.reduce((sum, criterion) => {
+                          const eval_found = evaluations.find((e: any) => 
+                            e.criterionId === criterion.id && e.judgeId === judgeId
+                          );
+                          return sum + (eval_found ? eval_found.score : 0);
+                        }, 0);
+                        return `<td class="judge-score">${totalJuez}</td>`;
+                      }).join('')}
+                      <td class="judge-score" style="background: #5dbba7; color: white;">
+                        <strong>${team.finalScore.toFixed(2)}</strong>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            `;
+          }).join('')}
+
+          <div class="footer">
+            PitchScore - Sistema de Evaluación para Concursos<br>
+            Este reporte es confidencial y solo debe ser usado para fines oficiales del concurso.
+          </div>
+        </body>
+      </html>
+    `;
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.resultsContainer}>
@@ -84,7 +341,17 @@ export default function ResultsScreen({
                 {lastUpdate.toLocaleTimeString('es-ES')}
               </Text>
             </View>
-            <View style={styles.headerSpacer} />
+            <TouchableOpacity 
+              onPress={handleExportPDF} 
+              style={styles.exportButton}
+              disabled={isExporting || teams.length === 0}
+            >
+              {isExporting ? (
+                <ActivityIndicator size="small" color="#5dbba7" />
+              ) : (
+                <Text style={styles.exportButtonText}>📄</Text>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -191,14 +458,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerSpacer: {
-    width: 70, // Mismo ancho que el botón de volver para centrar el contenido
-  },
   backButton: {
     padding: 10,
     backgroundColor: 'rgba(255, 255, 255, 0.35)',
     borderRadius: 10,
     width: 70,
+  },
+  exportButton: {
+    padding: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.35)',
+    borderRadius: 10,
+    width: 50,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  exportButtonText: {
+    fontSize: 24,
   },
   backButtonText: {
     color: '#0a2f2a',

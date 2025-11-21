@@ -228,6 +228,19 @@ CHECKLIST - APP DE EVALUACIÓN PARA CONCURSOS
 [X] Componente totalmente funcional y reutilizable
 
 ┌─────────────────────────────────────────────────────────────┐
+│ EXPORTACIÓN DE REPORTES                                     │
+└─────────────────────────────────────────────────────────────┘
+[X] Instalación de expo-print y expo-sharing
+[X] Botón de exportación PDF en ResultsScreen
+[X] Generación de HTML formateado para PDF
+[X] Desglose detallado por equipo, juez y criterio
+[X] Tabla con puntuaciones individuales y totales
+[X] Resumen ejecutivo (total equipos, jueces, evaluaciones)
+[X] Diseño profesional del reporte con colores del tema
+[X] Destacado especial para el primer lugar
+[X] Funcionalidad de compartir PDF (WhatsApp, Email, etc.)
+
+┌─────────────────────────────────────────────────────────────┐
 │ DOCUMENTACIÓN                                               │
 └─────────────────────────────────────────────────────────────┘
 [ ] Documentación para administradores del concurso
