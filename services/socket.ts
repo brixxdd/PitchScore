@@ -1,12 +1,17 @@
 import { io, Socket } from 'socket.io-client';
 import { SocketEvents } from '../types';
 
+// 🔥 IP DIRECTA DEL SERVIDOR - CAMBIAR SI ES NECESARIO
+export const SERVER_URL = 'http://192.168.1.76:3001';
+
 class SocketService {
   private socket: Socket | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
 
   connect(url: string): Promise<Socket> {
+    console.log('🔌 Intentando conectar a:', url);
+    console.log('📍 IP del servidor:', url);
     return new Promise((resolve, reject) => {
       this.socket = io(url, {
         reconnection: true,
@@ -56,7 +61,7 @@ class SocketService {
     callback: (data: SocketEvents[K]) => void
   ) {
     if (this.socket) {
-      this.socket.on(event, callback);
+      this.socket.on(event as string, callback as any);
     }
   }
 
@@ -65,7 +70,7 @@ class SocketService {
     callback?: (data: SocketEvents[K]) => void
   ) {
     if (this.socket) {
-      this.socket.off(event, callback);
+      this.socket.off(event as string, callback as any);
     }
   }
 

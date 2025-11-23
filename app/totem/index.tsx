@@ -9,7 +9,7 @@ import QRCodeDisplay from '../../components/QRCodeDisplay';
 import { QRService } from '../../services/qrService';
 import { QRToken, Team, Criterion } from '../../types';
 import { CRITERIA } from '../../config/constants';
-import { socketService } from '../../services/socket';
+import { socketService, SERVER_URL } from '../../services/socket';
 import AnimatedPositionChange from '../../components/AnimatedPositionChange';
 import AnimatedScoreChange from '../../components/AnimatedScoreChange';
 import ConnectionIndicator from '../../components/ConnectionIndicator';
@@ -42,7 +42,7 @@ export default function TotemScreen() {
     // Conectar socket
     const connectSocket = async () => {
       setConnectionStatus('connecting');
-      const SERVER_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
+      console.log('🎯 URL final a usar:', SERVER_URL);
       try {
         await socketService.connect(SERVER_URL);
         setConnectionStatus('connected');

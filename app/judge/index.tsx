@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import QRScanner from '../../components/QRScanner';
 import { QRToken, Team, Criterion, Evaluation } from '../../types';
 import { QRService } from '../../services/qrService';
-import { socketService } from '../../services/socket';
+import { socketService, SERVER_URL } from '../../services/socket';
 import { StorageService } from '../../services/storage';
 import { CRITERIA } from '../../config/constants';
 import ConnectionIndicator from '../../components/ConnectionIndicator';
@@ -85,7 +85,7 @@ export default function JudgeScreen() {
     // Conectar socket
     const connectSocket = async () => {
       setConnectionStatus('connecting');
-      const SERVER_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
+      console.log('🎯 URL final a usar:', SERVER_URL);
       try {
         await socketService.connect(SERVER_URL);
         setConnectionStatus('connected');

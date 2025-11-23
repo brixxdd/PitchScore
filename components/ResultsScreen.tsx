@@ -9,7 +9,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { Team } from '../types';
 import { CRITERIA } from '../config/constants';
-import { socketService } from '../services/socket';
+import { socketService, SERVER_URL } from '../services/socket';
 import AnimatedScoreChange from './AnimatedScoreChange';
 
 interface ResultsScreenProps {
@@ -49,7 +49,7 @@ export default function ResultsScreen({
   const handleExportPDF = async () => {
     try {
       setIsExporting(true);
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/debug/evaluations`);
+      const response = await fetch(`${SERVER_URL}/api/debug/evaluations`);
       const data = await response.json();
       const html = generatePDFHTML(data, teams);
       const { uri } = await Print.printToFileAsync({ html });
