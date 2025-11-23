@@ -70,8 +70,9 @@ export interface SocketEvents {
   
   // Servidor -> Cliente
   'totem:connected': { totemId: string }; // Confirmación de conexión del Totem
-  'judge:connected': { judgeId: string; order: number };
+  'judge:connected': { judgeId: string; order: number; pendingTeams?: Array<{ id: string; name: string }> };
   'judge:connection-error': { error: string }; // Error al conectar Judge
+  'evaluation:status': { teamId: string; teamName: string; judgesExpected: string[]; judgesResponded: string[]; pendingJudges: string[]; allComplete: boolean };
   'team:updated': Team;
   'team:added': Team;
   'team:added:success': Team;
@@ -81,7 +82,9 @@ export interface SocketEvents {
   'totem:criterion-changed': { criterionId: string; criterionName: string };
   'team:received': { team: Team }; // Equipo enviado a jueces para evaluación completa
   'evaluation:received': { teamId: string; criterionId: string; judgeId: string };
-  'evaluation:complete': { teamId: string; judgeId: string; finalScore: number; teamName: string }; // Confirmación de evaluación completa
+  'evaluation:complete': { teamId: string; judgeId: string; finalScore: number; teamName: string; allJudgesComplete?: boolean }; // Confirmación de evaluación completa
+  'team:sent:success': { team: Team };
+  'team:sent:error': { error: string };
   'evaluation:error': { error: string }; // Error al procesar evaluación
   'results:updated': { teams: Team[] };
   'system:reset-success': {}; // Confirmación de reset exitoso

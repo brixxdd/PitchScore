@@ -248,9 +248,74 @@ CHECKLIST - APP DE EVALUACIÓN PARA CONCURSOS
 [ ] Guía de uso del modo totem
 [ ] Guía de uso del modo juez
 
+┌─────────────────────────────────────────────────────────────┐
+│ CORRECCIONES CRÍTICAS - USO EN PRODUCCIÓN                  │
+└─────────────────────────────────────────────────────────────┘
+[X] RECONEXIÓN AUTOMÁTICA DE JUECES
+    [X] Guardar judgeId y totemId en AsyncStorage al conectar
+    [X] Al reconectar, verificar si hay datos guardados
+    [X] Reconectar automáticamente sin escanear QR
+    [X] Sincronizar estado perdido al reconectar
+    [X] Recibir evaluaciones que se perdieron durante desconexión
+    [X] Manejar reconexión en caso de pérdida temporal de WiFi
+    [X] Implementar sistema de heartbeat para detectar desconexiones
+    [X] Reintentos automáticos con backoff exponencial
+
+[X] SINCRONIZACIÓN DE ESTADO AL RECONECTAR
+    [X] Servidor: Mantener historial de equipos enviados a cada juez
+    [X] Servidor: Endpoint para obtener estado pendiente del juez
+    [X] Cliente: Solicitar estado pendiente al reconectar
+    [X] Cliente: Recibir equipos que se perdieron durante desconexión
+    [X] Cliente: Mostrar notificación de sincronización
+    [X] Validar que el juez recibe todos los equipos enviados
+
+[X] CONTROL DE ESTADO DE EVALUACIÓN
+    [X] Servidor: Rastrear qué jueces han respondido cada equipo
+    [X] Servidor: Campo en Team para tracking de evaluaciones por juez
+    [X] Servidor: No permitir enviar siguiente equipo si hay evaluaciones pendientes
+    [X] Servidor: Evento 'evaluation:status' para notificar estado
+    [X] Totem: Mostrar lista de jueces que faltan por responder
+    [X] Totem: Deshabilitar botón "Enviar siguiente equipo" si hay pendientes
+    [X] Totem: Indicador visual de estado de evaluación
+    [X] Totem: Notificación cuando todos los jueces han respondido
+
+[X] PREVENIR PÉRDIDA DE EVALUACIONES
+    [X] Servidor: Validar que no se puede enviar equipo nuevo si hay pendientes
+    [ ] Servidor: Guardar evaluaciones parciales en cache
+    [ ] Cliente: Guardar evaluación en progreso localmente
+    [ ] Cliente: Reenviar evaluación si se perdió conexión
+    [ ] Cliente: Mostrar advertencia si hay evaluación en progreso
+    [ ] Implementar sistema de cola para evaluaciones
+
+[ ] PANEL DE ADMINISTRACIÓN SEPARADO
+    [ ] Crear nueva pantalla 'admin' en totem (no es totem distinto)
+    [ ] Panel puede enviar equipos desde ahí
+    [ ] Panel puede ver estado de evaluaciones
+    [ ] Panel puede ver qué jueces faltan por responder
+    [ ] Totem siempre muestra tabla de posiciones
+    [ ] Panel de admin accesible desde totem (mismo dispositivo)
+    [ ] Validar que solo hay un totem activo
+
+[ ] MEJOR MANEJO DE RECONEXIÓN
+    [ ] Detectar desconexión automáticamente
+    [ ] Reconectar en background sin interrumpir al usuario
+    [ ] Mantener estado local durante reconexión
+    [ ] Sincronizar cambios al reconectar
+    [ ] Manejar reconexión rápida (pérdida temporal de WiFi)
+    [ ] Manejar reconexión lenta (modo ahorro de energía)
+    [ ] Logs detallados de eventos de conexión/desconexión
+
+[ ] MEJORAS ADICIONALES
+    [ ] Sistema de heartbeat para mantener conexión activa
+    [ ] Timeout configurable para evaluaciones
+    [ ] Notificaciones push para cambios importantes
+    [ ] Modo offline con sincronización posterior
+    [ ] Validación de integridad de datos
+
 ═══════════════════════════════════════════════════════════════
 NOTAS:
 - Marcar con [X] cuando una tarea esté completada
 - Agregar notas adicionales debajo de cada sección si es necesario
+- Estas correcciones son CRÍTICAS para uso en producción
 ═══════════════════════════════════════════════════════════════
 

@@ -56,6 +56,9 @@ const teamSchema = new mongoose.Schema({
   }],
   sentToJudges: { type: Boolean, default: false },
   evaluationsCompleted: { type: Number, default: 0 },
+  // Nuevo: Rastrear qué jueces han respondido este equipo
+  judgesResponded: { type: [String], default: [] }, // Array de judgeIds que han respondido
+  judgesExpected: { type: [String], default: [] }, // Array de judgeIds que deben responder
 }, { timestamps: true });
 
 const criterionSchema = new mongoose.Schema({
@@ -151,7 +154,11 @@ app.get('/api/debug/summary/:teamId', async (req, res) => {
         id: team.id,
         name: team.name,
         finalScore: team.finalScore,
-        scores: team.scores
+        scores: team.scores,
+        sentToJudges: team.sentToJudges,
+        judgesExpected: team.judgesExpected || [],
+        judgesResponded: team.judgesResponded || [],
+        pendingJudges: (team.judgesExpected || []).filter(id => !(team.judgesResponded || []).includes(id)),
       },
       evaluationsByCriterion: Object.keys(byCriterion).map(criterionId => {
         const evals = byCriterion[criterionId];
@@ -169,6 +176,41 @@ app.get('/api/debug/summary/:teamId', async (req, res) => {
     };
     
     res.json(summary);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Endpoint para limpiar equipos en "limbo" (marcar como completados si todos los jueces activos respondieron)
+app.post('/api/debug/fix-pending-teams/:totemId', async (req, res) => {
+  try {
+    const { totemId } = req.params;
+    const teams = await Team.find({ totemId, sentToJudges: true });
+    const judges = await Judge.find({ totemId });
+    const activeJudgeIds = judges.map(j => j.id);
+    
+    let fixed = 0;
+    for (const team of teams) {
+      if (!team.judgesExpected || !Array.isArray(team.judgesExpected)) continue;
+      if (!team.judgesResponded || !Array.isArray(team.judgesResponded)) {
+        team.judgesResponded = [];
+      }
+      
+      // Verificar si todos los jueces activos han respondido
+      const activeJudgesExpected = team.judgesExpected.filter(id => activeJudgeIds.includes(id));
+      const activeJudgesResponded = team.judgesResponded.filter(id => activeJudgeIds.includes(id));
+      
+      if (activeJudgesExpected.length > 0 && activeJudgesResponded.length >= activeJudgesExpected.length) {
+        // Todos los jueces activos respondieron, actualizar judgesExpected para solo incluir activos
+        team.judgesExpected = activeJudgeIds;
+        team.judgesResponded = activeJudgesResponded;
+        await team.save();
+        fixed++;
+        console.log(`✅ Equipo "${team.name}" marcado como completado (todos los jueces activos respondieron)`);
+      }
+    }
+    
+    res.json({ fixed, message: `Se corrigieron ${fixed} equipos` });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -230,9 +272,29 @@ io.on('connection', (socket) => {
       socket.join(data.totemId);
       console.log(`✅ Juez "${data.judgeId}" conectado al totem "${data.totemId}"`);
       
+      // Buscar equipos enviados a jueces que este juez aún no ha recibido
+      const teamsSentToJudges = await Team.find({
+        totemId: data.totemId,
+        sentToJudges: true,
+        judgesExpected: { $in: [data.judgeId] },
+      });
+
+      // Enviar equipos pendientes al juez que se reconectó
+      for (const team of teamsSentToJudges) {
+        // Verificar si el juez ya respondió este equipo
+        const hasResponded = team.judgesResponded && team.judgesResponded.includes(data.judgeId);
+        if (!hasResponded) {
+          console.log(`📤 Enviando equipo pendiente "${team.name}" a juez reconectado "${data.judgeId}"`);
+          socket.emit('team:received', { team });
+        }
+      }
+      
       socket.emit('judge:connected', {
         judgeId: data.judgeId,
         order: judge.order || 0,
+        pendingTeams: teamsSentToJudges.filter(t => 
+          !t.judgesResponded || !t.judgesResponded.includes(data.judgeId)
+        ).map(t => ({ id: t.id, name: t.name })),
       });
     } catch (error) {
       console.error('Error en judge:connect:', error);
@@ -329,15 +391,64 @@ io.on('connection', (socket) => {
       // TAMBIÉN emitir a TODOS los clientes (backup) por si no están en la sala
       io.emit('results:updated', { teams: allTeams });
 
+      // Registrar que este juez ha respondido
+      if (!team.judgesResponded || !Array.isArray(team.judgesResponded)) {
+        team.judgesResponded = [];
+      }
+      
+      if (!team.judgesResponded.includes(judgeId)) {
+        team.judgesResponded.push(judgeId);
+        await team.save();
+        console.log(`   ✅ Juez "${judgeId}" registrado como respondido para "${team.name}"`);
+        console.log(`   📊 Estado actual: ${team.judgesResponded.length}/${team.judgesExpected?.length || 0} jueces`);
+      } else {
+        console.log(`   ⚠️ Juez "${judgeId}" ya estaba registrado como respondido para "${team.name}"`);
+      }
+
+      // Obtener jueces actualmente activos para verificar si todos respondieron
+      const activeJudges = await Judge.find({ totemId: team.totemId });
+      const activeJudgeIds = activeJudges.map(j => j.id);
+      
+      // Solo considerar jueces activos
+      const activeJudgesExpected = (team.judgesExpected || []).filter(id => activeJudgeIds.includes(id));
+      const activeJudgesResponded = (team.judgesResponded || []).filter(id => activeJudgeIds.includes(id));
+      
+      // Si todos los jueces activos han respondido, actualizar judgesExpected para solo incluir activos
+      if (activeJudgesExpected.length > 0 && activeJudgesResponded.length >= activeJudgesExpected.length) {
+        console.log(`   🔄 Todos los jueces activos respondieron - actualizando judgesExpected`);
+        team.judgesExpected = activeJudgeIds;
+        team.judgesResponded = activeJudgesResponded;
+        await team.save();
+      }
+
+      // Verificar si todos los jueces han respondido (ahora solo considerando activos)
+      const allJudgesResponded = activeJudgesExpected.length > 0 && 
+        activeJudgesResponded.length >= activeJudgesExpected.length;
+
+      // Emitir estado de evaluación actualizado
+      io.to(team.totemId).emit('evaluation:status', {
+        teamId: team.id,
+        teamName: team.name,
+        judgesExpected: team.judgesExpected,
+        judgesResponded: team.judgesResponded,
+        pendingJudges: team.judgesExpected.filter(id => !team.judgesResponded.includes(id)),
+        allComplete: allJudgesResponded,
+      });
+
       // Confirmar al juez
       socket.emit('evaluation:complete', {
         teamId,
         judgeId,
         finalScore: team.finalScore,
         teamName: team.name,
+        allJudgesComplete: allJudgesResponded,
       });
 
       console.log(`✅ Actualización emitida: "${team.name}" = ${finalScore.toFixed(2)} pts`);
+      console.log(`   Jueces respondidos: ${team.judgesResponded.length}/${team.judgesExpected.length}`);
+      if (allJudgesResponded) {
+        console.log(`   ✅ Todos los jueces han respondido para "${team.name}"`);
+      }
     } catch (error) {
       console.error('Error en evaluation:submit-batch:', error);
       socket.emit('evaluation:error', { error: error.message });
@@ -432,20 +543,139 @@ io.on('connection', (socket) => {
 
   socket.on('team:send-to-judges', async (data) => {
     try {
+      // Verificar si hay equipos con evaluaciones pendientes
+      // Obtener todos los equipos enviados y verificar manualmente en JavaScript
+      console.log(`\n🔍 Verificando equipos con evaluaciones pendientes para totem "${data.totemId}"...`);
+      const teamsSent = await Team.find({
+        totemId: data.totemId,
+        sentToJudges: true,
+      });
+      console.log(`   Total de equipos enviados: ${teamsSent.length}`);
+      
+      // Obtener jueces actualmente activos en este totem
+      const activeJudges = await Judge.find({ totemId: data.totemId });
+      const activeJudgeIds = activeJudges.map(j => j.id);
+      console.log(`   Jueces activos actualmente: ${activeJudgeIds.length} (${activeJudgeIds.join(', ')})`);
+
+      // Filtrar manualmente para evitar problemas con campos que no existen
+      // Solo considerar jueces que están actualmente activos
+      const teamsWithPendingEvaluations = teamsSent.filter(team => {
+        // Si no tiene judgesExpected, no hay evaluación pendiente (equipo antiguo)
+        if (!team.judgesExpected || !Array.isArray(team.judgesExpected)) {
+          console.log(`   ⚠️ Equipo "${team.name}" no tiene judgesExpected - ignorando (equipo antiguo)`);
+          return false;
+        }
+        
+        // Solo considerar jueces que están actualmente activos
+        const activeJudgesExpected = team.judgesExpected.filter(id => activeJudgeIds.includes(id));
+        
+        // Si no hay jueces activos esperados, no hay pendientes
+        if (activeJudgesExpected.length === 0) {
+          console.log(`   ✅ Equipo "${team.name}" - no hay jueces activos esperados (todos desconectados)`);
+          return false;
+        }
+        
+        // Si no tiene judgesResponded o no es array, hay pendientes
+        if (!team.judgesResponded || !Array.isArray(team.judgesResponded)) {
+          console.log(`   ⚠️ Equipo "${team.name}" no tiene judgesResponded válido - hay pendientes`);
+          return true;
+        }
+        
+        // Verificar si todos los jueces activos esperados han respondido
+        const activeJudgesResponded = team.judgesResponded.filter(id => activeJudgeIds.includes(id));
+        const hasPending = activeJudgesResponded.length < activeJudgesExpected.length;
+        
+        if (hasPending) {
+          console.log(`   ⚠️ Equipo "${team.name}" tiene evaluaciones pendientes:`);
+          console.log(`      Jueces activos esperados: ${activeJudgesExpected.length} (${activeJudgesExpected.join(', ')})`);
+          console.log(`      Jueces activos respondidos: ${activeJudgesResponded.length} (${activeJudgesResponded.join(', ')})`);
+          console.log(`      Pendientes: ${activeJudgesExpected.filter(id => !activeJudgesResponded.includes(id)).join(', ')}`);
+        } else {
+          console.log(`   ✅ Equipo "${team.name}" completado: ${activeJudgesResponded.length}/${activeJudgesExpected.length} jueces activos`);
+        }
+        
+        return hasPending;
+      });
+
+      // Antes de rechazar, intentar limpiar equipos donde todos los jueces activos ya respondieron
+      for (const team of teamsSent) {
+        if (!team.judgesExpected || !Array.isArray(team.judgesExpected)) continue;
+        if (!team.judgesResponded || !Array.isArray(team.judgesResponded)) continue;
+        
+        const activeJudgesExpected = team.judgesExpected.filter(id => activeJudgeIds.includes(id));
+        const activeJudgesResponded = team.judgesResponded.filter(id => activeJudgeIds.includes(id));
+        
+        // Si todos los jueces activos respondieron, actualizar el equipo
+        if (activeJudgesExpected.length > 0 && activeJudgesResponded.length >= activeJudgesExpected.length) {
+          console.log(`   🔧 Limpiando equipo "${team.name}" - todos los jueces activos respondieron`);
+          team.judgesExpected = activeJudgeIds;
+          team.judgesResponded = activeJudgesResponded;
+          await team.save();
+        }
+      }
+      
+      // Verificar nuevamente después de la limpieza
+      const teamsSentAfterCleanup = await Team.find({
+        totemId: data.totemId,
+        sentToJudges: true,
+      });
+      
+      const teamsWithPendingAfterCleanup = teamsSentAfterCleanup.filter(team => {
+        if (!team.judgesExpected || !Array.isArray(team.judgesExpected)) return false;
+        const activeJudgesExpected = team.judgesExpected.filter(id => activeJudgeIds.includes(id));
+        if (activeJudgesExpected.length === 0) return false;
+        if (!team.judgesResponded || !Array.isArray(team.judgesResponded)) return true;
+        const activeJudgesResponded = team.judgesResponded.filter(id => activeJudgeIds.includes(id));
+        return activeJudgesResponded.length < activeJudgesExpected.length;
+      });
+
+      if (teamsWithPendingAfterCleanup.length > 0) {
+        const pendingTeamNames = teamsWithPendingAfterCleanup.map(t => t.name).join(', ');
+        console.log(`⚠️ No se puede enviar equipo: hay evaluaciones pendientes de: ${pendingTeamNames}`);
+        socket.emit('team:sent:error', { 
+          error: `No se puede enviar equipo nuevo. Hay evaluaciones pendientes de: ${pendingTeamNames}` 
+        });
+        return;
+      }
+
       const team = await Team.findOne({ id: data.teamId });
       if (!team) {
         socket.emit('error', { message: 'Equipo no encontrado' });
         return;
       }
 
-      // Marcar como enviado a jueces
+      // Obtener todos los jueces conectados al totem
+      const judges = await Judge.find({ totemId: data.totemId });
+      const judgeIds = judges.map(j => j.id);
+
+      // Marcar como enviado a jueces y registrar qué jueces deben responder
       team.sentToJudges = true;
+      team.judgesExpected = judgeIds;
+      team.judgesResponded = []; // Resetear respuestas
       await team.save();
       
-      console.log(`✅ Equipo "${team.name}" enviado a jueces para evaluación completa`);
+      console.log(`✅ Equipo "${team.name}" enviado a ${judgeIds.length} jueces para evaluación completa`);
+      console.log(`   Jueces esperados: ${judgeIds.join(', ')}`);
 
-      // Emitir a todos los jueces del totem
+      // Obtener todos los sockets en la sala del totem para debugging
+      const socketsInRoom = await io.in(data.totemId).fetchSockets();
+      console.log(`📡 Sockets en sala "${data.totemId}": ${socketsInRoom.length}`);
+
+      // Emitir a todos los jueces del totem (en la sala)
       io.to(data.totemId).emit('team:received', { team });
+      
+      // También emitir globalmente como backup (por si algún juez no está en la sala)
+      console.log(`📢 Emitiendo 'team:received' a sala "${data.totemId}" y globalmente`);
+      io.emit('team:received', { team });
+      
+      // Emitir estado de evaluación al totem
+      io.to(data.totemId).emit('evaluation:status', {
+        teamId: team.id,
+        teamName: team.name,
+        judgesExpected: judgeIds,
+        judgesResponded: [],
+        pendingJudges: judgeIds,
+      });
       
       // Confirmar al totem
       socket.emit('team:sent:success', { team });

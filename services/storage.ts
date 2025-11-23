@@ -31,6 +31,10 @@ export class StorageService {
     return await AsyncStorage.getItem(STORAGE_KEYS.TOTEM_ID);
   }
 
+  static async removeTotemId(): Promise<void> {
+    await AsyncStorage.removeItem(STORAGE_KEYS.TOTEM_ID);
+  }
+
   // Teams Cache
   static async saveTeams(teams: Team[]): Promise<void> {
     await AsyncStorage.setItem(STORAGE_KEYS.TEAMS, JSON.stringify(teams));

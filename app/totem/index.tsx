@@ -31,6 +31,15 @@ export default function TotemScreen() {
     QRService.generateToken(totemId)
   );
   const previousFirstPlace = useRef<string | null>(null);
+  // Estado de evaluaciones pendientes
+  const [evaluationStatus, setEvaluationStatus] = useState<{
+    teamId: string;
+    teamName: string;
+    judgesExpected: string[];
+    judgesResponded: string[];
+    pendingJudges: string[];
+    allComplete: boolean;
+  } | null>(null);
 
   useEffect(() => {
     // Activar modo kiosko - pantalla completa
@@ -124,6 +133,57 @@ export default function TotemScreen() {
           });
         });
 
+        // Escuchar estado de evaluaciones
+        socketService.on('evaluation:status', (data: {
+          teamId: string;
+          teamName: string;
+          judgesExpected: string[];
+          judgesResponded: string[];
+          pendingJudges: string[];
+          allComplete: boolean;
+        }) => {
+          console.log('📊 Estado de evaluación actualizado:', data);
+          setEvaluationStatus(data);
+          
+          if (data.allComplete) {
+            console.log(`✅ Todos los jueces han respondido para "${data.teamName}"`);
+            soundService.playCelebrationSound();
+            
+            // Limpiar el estado después de un breve delay para que el usuario vea el mensaje
+            setTimeout(() => {
+              setEvaluationStatus(null);
+              console.log('🔄 Estado de evaluación limpiado - listo para enviar siguiente equipo');
+            }, 2000);
+          }
+        });
+
+        // Escuchar éxito al enviar equipo
+        socketService.on('team:sent:success', (data: { team: Team }) => {
+          console.log('✅ Equipo enviado exitosamente:', data.team.name);
+          
+          // Ahora sí actualizar el estado local
+          setTeams(prevTeams =>
+            prevTeams.map(t =>
+              t.id === data.team.id ? { ...t, sentToJudges: true } : t
+            )
+          );
+          
+          soundService.playNotificationSound();
+        });
+
+        // Escuchar errores al enviar equipo
+        socketService.on('team:sent:error', (data: { error: string }) => {
+          console.error('❌ Error al enviar equipo:', data.error);
+          
+          // NO actualizar el estado - el equipo NO se envió
+          // Mostrar error al usuario
+          Alert.alert(
+            'Error al Enviar Equipo',
+            data.error + '\n\nEl equipo no se ha enviado. Por favor intenta nuevamente.',
+            [{ text: 'Entendido' }]
+          );
+        });
+
         // Solicitar equipos existentes al conectar
         console.log('📡 Solicitando lista de equipos...');
         socketService.emit('team:list', { totemId });
@@ -184,17 +244,22 @@ export default function TotemScreen() {
     const team = teams.find(t => t.id === teamId);
     if (!team) return;
 
+    // Verificar si hay evaluaciones pendientes
+    if (evaluationStatus && !evaluationStatus.allComplete) {
+      const pendingJudges = evaluationStatus.pendingJudges.length;
+      Alert.alert(
+        'Evaluaciones Pendientes',
+        `No se puede enviar un nuevo equipo.\n\nHay ${pendingJudges} juez(es) que aún no han respondido para "${evaluationStatus.teamName}".\n\nPor favor espera a que todos los jueces completen su evaluación.`,
+        [{ text: 'Entendido' }]
+      );
+      return;
+    }
+
+    // NO actualizar el estado local aquí - esperar confirmación del servidor
     // Enviar equipo a jueces para evaluación completa
     socketService.emit('team:send-to-judges', { totemId, teamId });
-
-    // Marcar localmente como enviado
-    setTeams(prevTeams =>
-      prevTeams.map(t =>
-        t.id === teamId ? { ...t, sentToJudges: true } : t
-      )
-    );
-
-    soundService.playNotificationSound();
+    
+    // El estado se actualizará cuando se reciba 'team:sent:success' o 'team:sent:error'
   };
 
   const handleChangeTeam = (teamId: string) => {
@@ -279,6 +344,7 @@ export default function TotemScreen() {
         teams={teams}
         activeTeam={activeTeam}
         activeCriterion={activeCriterion}
+        evaluationStatus={evaluationStatus}
         onAddTeam={handleAddTeam}
         onSendTeamToJudges={handleSendTeamToJudges}
         onChangeTeam={handleChangeTeam}
@@ -309,6 +375,7 @@ function AdminPanel({
   teams,
   activeTeam,
   activeCriterion,
+  evaluationStatus,
   onAddTeam,
   onSendTeamToJudges,
   onChangeTeam,
@@ -320,6 +387,14 @@ function AdminPanel({
   teams: Team[];
   activeTeam: string | null;
   activeCriterion: string | null;
+  evaluationStatus: {
+    teamId: string;
+    teamName: string;
+    judgesExpected: string[];
+    judgesResponded: string[];
+    pendingJudges: string[];
+    allComplete: boolean;
+  } | null;
   onAddTeam: (name: string) => void;
   onSendTeamToJudges: (teamId: string) => void;
   onChangeTeam: (teamId: string) => void;
@@ -357,6 +432,31 @@ function AdminPanel({
       </LinearGradient>
 
       <ScrollView style={styles.adminScrollView} contentContainerStyle={styles.adminScrollContent}>
+        {/* Estado de Evaluación Actual */}
+        {evaluationStatus && !evaluationStatus.allComplete && (
+          <View style={styles.evaluationStatusCard}>
+            <View style={styles.evaluationStatusHeader}>
+              <Text style={styles.evaluationStatusTitle}>⏳ Evaluación en Progreso</Text>
+            </View>
+            <Text style={styles.evaluationStatusTeam}>{evaluationStatus.teamName}</Text>
+            <View style={styles.evaluationStatusInfo}>
+              <Text style={styles.evaluationStatusText}>
+                Jueces respondidos: {evaluationStatus.judgesResponded.length}/{evaluationStatus.judgesExpected.length}
+              </Text>
+              {evaluationStatus.pendingJudges.length > 0 && (
+                <Text style={styles.evaluationStatusPending}>
+                  Faltan por responder: {evaluationStatus.pendingJudges.length} juez(es)
+                </Text>
+              )}
+            </View>
+            <View style={styles.evaluationStatusWarning}>
+              <Text style={styles.evaluationStatusWarningText}>
+                ⚠️ No se puede enviar un nuevo equipo hasta que todos los jueces completen su evaluación.
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* Registrar Equipos */}
         <View
           style={styles.section}
@@ -436,20 +536,20 @@ function AdminPanel({
                       <TouchableOpacity
                         style={[
                           styles.sendButton,
-                          isSent && styles.sendButtonDisabled,
+                          (isSent || (evaluationStatus && !evaluationStatus.allComplete)) && styles.sendButtonDisabled,
                         ]}
                         onPress={() => onSendTeamToJudges(team.id)}
-                        disabled={isSent}
+                        disabled={isSent || (evaluationStatus && !evaluationStatus.allComplete)}
                       >
                         <LinearGradient
-                          colors={isSent ? ['#e0e0e0', '#d0d0d0'] : ['#5dbba7', '#3a9989']}
+                          colors={(isSent || (evaluationStatus && !evaluationStatus.allComplete)) ? ['#e0e0e0', '#d0d0d0'] : ['#5dbba7', '#3a9989']}
                           style={styles.sendButtonGradient}
                         >
                           <Text style={[
                             styles.sendButtonText,
-                            isSent && styles.sendButtonTextDisabled
+                            (isSent || (evaluationStatus && !evaluationStatus.allComplete)) && styles.sendButtonTextDisabled
                           ]}>
-                            {isSent ? 'Enviado' : 'Evaluar'}
+                            {isSent ? 'Enviado' : (evaluationStatus && !evaluationStatus.allComplete) ? 'Esperando...' : 'Evaluar'}
                           </Text>
                         </LinearGradient>
                       </TouchableOpacity>
@@ -1014,5 +1114,59 @@ const styles = StyleSheet.create({
   connectionContainer: {
     marginTop: 15,
     alignItems: 'center',
+  },
+  evaluationStatusCard: {
+    backgroundColor: '#fff9e6',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: '#ffd700',
+    shadowColor: '#ffd700',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  evaluationStatusHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  evaluationStatusTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#b8860b',
+  },
+  evaluationStatusTeam: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#0a2f2a',
+    marginBottom: 12,
+  },
+  evaluationStatusInfo: {
+    marginBottom: 12,
+  },
+  evaluationStatusText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  evaluationStatusPending: {
+    fontSize: 14,
+    color: '#d9534f',
+    fontWeight: '600',
+  },
+  evaluationStatusWarning: {
+    backgroundColor: '#fff3cd',
+    padding: 12,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#ffc107',
+  },
+  evaluationStatusWarningText: {
+    fontSize: 13,
+    color: '#856404',
+    lineHeight: 18,
   },
 });
